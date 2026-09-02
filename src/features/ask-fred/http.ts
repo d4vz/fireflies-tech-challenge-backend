@@ -22,6 +22,7 @@ export type AskFredDeps = {
   model: LanguageModel;
   listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
   searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
+  origin?: string;
 };
 
 export type AskFredRequest = {
@@ -47,7 +48,7 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
     } catch {
       return c.json({ error: "invalid body" }, 400);
     }
-    const origin = parseAskFredOrigin(c.req.header("x-app-origin") ?? c.req.header("origin"));
+    const origin = parseAskFredOrigin(deps.origin);
     if (origin === undefined) {
       return c.json({ error: "invalid origin" }, 400);
     }

@@ -46,6 +46,21 @@ test("parseSecrets reads keys from env and keeps secrets out of yaml", () => {
   });
   assert.equal(secrets.OPENAI_API_KEY, "sk-test");
   assert.equal(secrets.S3_REGION, "us-east-1");
+  assert.equal(secrets.FRONTEND_ORIGIN, undefined);
+});
+
+test("parseSecrets reads FRONTEND_ORIGIN when set", () => {
+  const secrets = parseSecrets({
+    OPENAI_API_KEY: "sk-test",
+    MONGODB_URI: "mongodb://localhost",
+    S3_ENDPOINT: "http://localhost:9000",
+    S3_ACCESS_KEY: "key",
+    S3_SECRET_KEY: "secret",
+    S3_BUCKET: "fireflies",
+    REDIS_URL: "redis://127.0.0.1:6379",
+    FRONTEND_ORIGIN: "https://frontend-production-8339.up.railway.app",
+  });
+  assert.equal(secrets.FRONTEND_ORIGIN, "https://frontend-production-8339.up.railway.app");
 });
 
 test("parseSecrets rejects missing OPENAI_API_KEY", () => {

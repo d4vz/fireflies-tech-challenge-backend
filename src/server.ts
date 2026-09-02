@@ -52,6 +52,7 @@ const app = createApp({
   settings,
   embed,
   model,
+  origin: secrets.FRONTEND_ORIGIN,
 });
 
 serve({

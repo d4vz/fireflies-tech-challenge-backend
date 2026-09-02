@@ -25,6 +25,7 @@ export type CreateAppDeps = {
   settings: AppSettings;
   embed: Embed;
   model: LanguageModel;
+  origin?: string;
 };
 
 export function createApp(deps: CreateAppDeps) {
@@ -36,6 +37,7 @@ export function createApp(deps: CreateAppDeps) {
     model: deps.model,
     listMeetings: (query) => listMeetings(deps.meetings, query),
     searchTranscripts: (query) => searchTranscripts(deps, query),
+    origin: deps.origin,
   });
   return app;
 }
