@@ -11,7 +11,7 @@ import { mountAskFred } from "./features/ask-fred/http.ts";
 import { mountHealth } from "./features/health/http.ts";
 import { mountMeetings } from "./features/meetings/http.ts";
 import { listMeetings } from "./features/meetings/list-query.ts";
-import { searchTranscripts } from "./features/meetings/search.ts";
+import { searchMeetingTranscripts, searchTranscripts } from "./features/meetings/search.ts";
 import type { MeetingsStore } from "./features/meetings/store.ts";
 import type { TranscriptsStore } from "./features/meetings/transcripts.ts";
 
@@ -37,6 +37,7 @@ export function createApp(deps: CreateAppDeps) {
     model: deps.model,
     listMeetings: (query) => listMeetings(deps.meetings, query),
     searchTranscripts: (query) => searchTranscripts(deps, query),
+    searchMeetingTranscripts: (query) => searchMeetingTranscripts(deps, query),
     origin: deps.origin,
   });
   return app;

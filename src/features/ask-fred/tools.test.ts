@@ -4,7 +4,11 @@ import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { createAskFredTools, listMeetingsToolSchema } from "./tools.ts";
 import type { MeetingListQuery } from "../meetings/list-query.ts";
-import type { TranscriptSearchQuery } from "../meetings/search.ts";
+import {
+  meetingTranscriptSearchQuerySchema,
+  type MeetingTranscriptSearchQuery,
+  type TranscriptSearchQuery,
+} from "../meetings/search.ts";
 
 const executeOptions = {
   toolCallId: "t1",
@@ -17,6 +21,10 @@ test("listMeetings tool schema is JSON Schema representable", () => {
   assert.doesNotThrow(() => z.toJSONSchema(listMeetingsToolSchema));
 });
 
+test("searchMeetingTranscripts tool schema is JSON Schema representable", () => {
+  assert.doesNotThrow(() => z.toJSONSchema(meetingTranscriptSearchQuerySchema));
+});
+
 test("listMeetings execute does not take sourceId", async () => {
   const seen: MeetingListQuery[] = [];
   const tools = createAskFredTools({
@@ -26,6 +34,9 @@ test("listMeetings execute does not take sourceId", async () => {
       return { items: [], total: 0, page: query.page, limit: query.limit };
     },
     searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async () => {
       throw new Error("unused");
     },
   });
@@ -50,6 +61,9 @@ test("listMeetings tool execute maps ISO datetimes onto MeetingListQuery dates",
       return { items: [], total: 0, page: query.page, limit: query.limit };
     },
     searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async () => {
       throw new Error("unused");
     },
   });
@@ -85,6 +99,9 @@ test("listMeetings tool execute calls the injected listMeetings function", async
     searchTranscripts: async () => {
       throw new Error("unused");
     },
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
+    },
   });
   const query = { page: 2, limit: 5, status: "queued" as const };
   const execute = tools.listMeetings.execute;
@@ -108,6 +125,9 @@ test("searchTranscripts tool execute calls the injected searchTranscripts functi
     searchTranscripts: async (query) => {
       seen.push(query);
       return [];
+    },
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
     },
   });
   const query: TranscriptSearchQuery = { query: "billing", limit: 8 };
@@ -150,6 +170,9 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
     searchTranscripts: async () => {
       throw new Error("unused");
     },
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
+    },
   });
   const execute = tools.listMeetings.execute;
   assert.ok(execute);
@@ -187,10 +210,76 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
         score: 0.91,
       },
     ],
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
+    },
   });
   const execute = tools.searchTranscripts.execute;
   assert.ok(execute);
   const result = await execute({ query: "star systems", limit: 8 }, executeOptions);
+  assert.deepEqual(result, [
+    {
+      meetingId: "6a963d4f786296c73b01d6d0",
+      sourceId: "screen-recording.webm",
+      createdAt: "2026-09-01T03:33:00.000Z",
+      index: 2,
+      text: "expanding into new star systems",
+      score: 0.91,
+      href: "/meetings/6a963d4f786296c73b01d6d0",
+    },
+  ]);
+});
+
+test("searchMeetingTranscripts execute forwards meetingId and query", async () => {
+  const seen: MeetingTranscriptSearchQuery[] = [];
+  const tools = createAskFredTools({
+    model: "openai/gpt-4o-mini",
+    listMeetings: async () => {
+      throw new Error("unused");
+    },
+    searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async (query) => {
+      seen.push(query);
+      return [];
+    },
+  });
+  const execute = tools.searchMeetingTranscripts.execute;
+  assert.ok(execute);
+  await execute(
+    { meetingId: "6a963d4f786296c73b01d6d0", query: "billing", limit: 8 },
+    executeOptions,
+  );
+  assert.deepEqual(seen, [{ meetingId: "6a963d4f786296c73b01d6d0", query: "billing", limit: 8 }]);
+});
+
+test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app href", async () => {
+  const tools = createAskFredTools({
+    model: "openai/gpt-4o-mini",
+    listMeetings: async () => {
+      throw new Error("unused");
+    },
+    searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async () => [
+      {
+        meetingId: "6a963d4f786296c73b01d6d0",
+        sourceId: "screen-recording.webm",
+        createdAt: new Date("2026-09-01T03:33:00.000Z"),
+        index: 2,
+        text: "expanding into new star systems",
+        score: 0.91,
+      },
+    ],
+  });
+  const execute = tools.searchMeetingTranscripts.execute;
+  assert.ok(execute);
+  const result = await execute(
+    { meetingId: "6a963d4f786296c73b01d6d0", query: "star systems", limit: 8 },
+    executeOptions,
+  );
   assert.deepEqual(result, [
     {
       meetingId: "6a963d4f786296c73b01d6d0",

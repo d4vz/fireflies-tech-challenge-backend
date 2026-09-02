@@ -30,18 +30,61 @@ export type TranscriptChunkHit = {
 export type TranscriptsStore = {
   insertAll: (meetingId: string, chunks: NewTranscriptChunk[]) => Promise<void>;
   listByMeeting: (meetingId: string) => Promise<PublicTranscriptChunk[]>;
-  searchByEmbedding: (embedding: number[], limit: number) => Promise<TranscriptChunkHit[]>;
+  searchByEmbedding: (
+    embedding: number[],
+    limit: number,
+    meetingId?: string,
+  ) => Promise<TranscriptChunkHit[]>;
   ensureVectorIndex: () => Promise<void>;
 };
 
 const VECTOR_INDEX_NAME = "transcript_embedding";
 const VECTOR_DIMENSIONS = 1536;
 
+const VECTOR_INDEX_FIELDS = [
+  {
+    type: "vector",
+    path: "embedding",
+    numDimensions: VECTOR_DIMENSIONS,
+    similarity: "cosine",
+  },
+  { type: "filter", path: "meetingId" },
+] as const;
+
+type ListedVectorIndexField = {
+  type?: string;
+  path?: string;
+};
+
+type ListedVectorIndexDefinition = {
+  fields?: ListedVectorIndexField[];
+};
+
+type ListedSearchIndex = {
+  name: string;
+  latestDefinition?: ListedVectorIndexDefinition;
+  definition?: ListedVectorIndexDefinition;
+};
+
+function vectorIndexHasMeetingIdFilter(index: ListedSearchIndex): boolean {
+  const fields = index.latestDefinition?.fields ?? index.definition?.fields ?? [];
+  return fields.some((field) => field.type === "filter" && field.path === "meetingId");
+}
+
 type VectorHit = {
   meetingId: ObjectId;
   index: number;
   text: string;
   score: number;
+};
+
+type VectorSearchStage = {
+  index: string;
+  path: string;
+  queryVector: number[];
+  numCandidates: number;
+  limit: number;
+  filter?: { meetingId: ObjectId };
 };
 
 function isIndexExistsError(error: unknown): error is Error {
@@ -105,18 +148,23 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         .sort({ index: 1 })
         .toArray();
     },
-    searchByEmbedding: async (embedding, limit) => {
+    searchByEmbedding: async (embedding, limit, meetingId) => {
+      if (meetingId !== undefined && !ObjectId.isValid(meetingId)) {
+        return [];
+      }
+      const stage: VectorSearchStage = {
+        index: VECTOR_INDEX_NAME,
+        path: "embedding",
+        queryVector: embedding,
+        numCandidates: Math.max(limit * 10, 10),
+        limit,
+      };
+      if (meetingId !== undefined) {
+        stage.filter = { meetingId: new ObjectId(meetingId) };
+      }
       const rows = await collection
         .aggregate<VectorHit>([
-          {
-            $vectorSearch: {
-              index: VECTOR_INDEX_NAME,
-              path: "embedding",
-              queryVector: embedding,
-              numCandidates: Math.max(limit * 10, 10),
-              limit,
-            },
-          },
+          { $vectorSearch: stage },
           {
             $project: {
               meetingId: 1,
@@ -132,30 +180,28 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
     ensureVectorIndex: async () => {
       await ensureCollection(db, collection.collectionName);
       const existing = await collection.listSearchIndexes(VECTOR_INDEX_NAME).toArray();
-      if (existing.length > 0) {
+      const listed = existing[0];
+      if (listed === undefined) {
+        try {
+          await collection.createSearchIndex({
+            name: VECTOR_INDEX_NAME,
+            type: "vectorSearch",
+            definition: { fields: VECTOR_INDEX_FIELDS },
+          });
+        } catch (error) {
+          if (isIndexExistsError(error)) {
+            return;
+          }
+          throw error;
+        }
         return;
       }
-      try {
-        await collection.createSearchIndex({
-          name: VECTOR_INDEX_NAME,
-          type: "vectorSearch",
-          definition: {
-            fields: [
-              {
-                type: "vector",
-                path: "embedding",
-                numDimensions: VECTOR_DIMENSIONS,
-                similarity: "cosine",
-              },
-            ],
-          },
-        });
-      } catch (error) {
-        if (isIndexExistsError(error)) {
-          return;
-        }
-        throw error;
+      // Atlas $listSearchIndexes returns latestDefinition; createSearchIndex takes definition.
+      // SAFETY: the driver types the listing as { name: string } only.
+      if (vectorIndexHasMeetingIdFilter(listed as ListedSearchIndex)) {
+        return;
       }
+      await collection.updateSearchIndex(VECTOR_INDEX_NAME, { fields: VECTOR_INDEX_FIELDS });
     },
   };
 }
