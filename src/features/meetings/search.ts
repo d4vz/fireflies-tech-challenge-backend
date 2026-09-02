@@ -1,17 +1,15 @@
-import { ObjectId } from "mongodb";
+import { ObjectId, type WithId } from "mongodb";
 import { z } from "zod";
+import type { Actor } from "../../lib/auth/index.ts";
 import type { Embed } from "../../lib/embed/index.ts";
-import { meetingName } from "./meeting-name.ts";
-import type { MeetingsStore } from "./store.ts";
-import type { TranscriptsStore } from "./transcripts.ts";
+import { publicMeeting } from "./public-meeting.ts";
+import type { Meeting, Meetings } from "./store.ts";
+import type { TranscriptChunkHit, TranscriptsStore } from "./transcripts.ts";
 
 export type TranscriptSearchQuery = {
   query: string;
   limit: number;
-};
-
-export type MeetingTranscriptSearchQuery = TranscriptSearchQuery & {
-  meetingId: string;
+  meetingId?: string;
 };
 
 export type TranscriptHit = {
@@ -34,63 +32,66 @@ export const meetingTranscriptSearchQuerySchema = transcriptSearchQuerySchema.ex
 });
 
 export type SearchTranscriptsDeps = {
-  meetings: Pick<MeetingsStore, "get">;
+  meetings: Meetings;
   transcripts: TranscriptsStore;
   embed: Embed;
 };
 
-export async function searchTranscripts(
-  deps: SearchTranscriptsDeps,
-  query: TranscriptSearchQuery,
-): Promise<TranscriptHit[]> {
-  const [vector] = await deps.embed.run([query.query]);
-  if (vector === undefined) {
+async function ownedMeetingsForSearch(
+  meetings: Meetings,
+  actor: Actor,
+  meetingId: string | undefined,
+): Promise<WithId<Meeting>[]> {
+  if (meetingId !== undefined) {
+    const meeting = await meetings.get(actor, meetingId);
+    if (meeting === null) {
+      return [];
+    }
+    return [meeting];
+  }
+  const total = await meetings.count(actor, {});
+  if (total === 0) {
     return [];
   }
-  const hits = await deps.transcripts.searchByEmbedding(vector, query.limit);
-  const joined: TranscriptHit[] = [];
-  for (const hit of hits) {
-    const meeting = await deps.meetings.get(hit.meetingId);
-    if (!meeting) {
-      continue;
-    }
-    joined.push({
-      meetingId: hit.meetingId,
-      sourceId: meeting.sourceId,
-      name: meetingName(meeting.sourceId, meeting.name),
-      createdAt: meeting.createdAt,
-      index: hit.index,
-      text: hit.text,
-      score: hit.score,
-    });
-  }
-  return joined;
+  return meetings.list(actor, 0, total, {});
 }
 
-export async function searchMeetingTranscripts(
+function toHit(meeting: WithId<Meeting>, hit: TranscriptChunkHit): TranscriptHit {
+  const view = publicMeeting(meeting);
+  return {
+    meetingId: view.id,
+    sourceId: view.sourceId,
+    name: view.name,
+    createdAt: meeting.createdAt,
+    index: hit.index,
+    text: hit.text,
+    score: hit.score,
+  };
+}
+
+export async function searchTranscripts(
   deps: SearchTranscriptsDeps,
-  query: MeetingTranscriptSearchQuery,
+  actor: Actor,
+  query: TranscriptSearchQuery,
 ): Promise<TranscriptHit[]> {
-  const meeting = await deps.meetings.get(query.meetingId);
-  if (!meeting) {
+  const owned = await ownedMeetingsForSearch(deps.meetings, actor, query.meetingId);
+  if (owned.length === 0) {
     return [];
   }
   const [vector] = await deps.embed.run([query.query]);
   if (vector === undefined) {
     return [];
   }
-  const hits = await deps.transcripts.searchByEmbedding(vector, query.limit, query.meetingId);
+  const meetingIds = owned.map((meeting) => meeting._id.toHexString());
+  const byId = new Map(owned.map((meeting) => [meeting._id.toHexString(), meeting]));
+  const hits = await deps.transcripts.searchByEmbedding(vector, query.limit, meetingIds);
   const joined: TranscriptHit[] = [];
   for (const hit of hits) {
-    joined.push({
-      meetingId: hit.meetingId,
-      sourceId: meeting.sourceId,
-      name: meetingName(meeting.sourceId, meeting.name),
-      createdAt: meeting.createdAt,
-      index: hit.index,
-      text: hit.text,
-      score: hit.score,
-    });
+    const meeting = byId.get(hit.meetingId);
+    if (meeting === undefined) {
+      continue;
+    }
+    joined.push(toHit(meeting, hit));
   }
   return joined;
 }

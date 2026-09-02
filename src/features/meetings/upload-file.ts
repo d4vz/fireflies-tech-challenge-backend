@@ -1,10 +1,7 @@
-import { once } from "node:events";
-import { createWriteStream } from "node:fs";
-import { mkdtemp, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
+import { stat } from "node:fs/promises";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { MeetingMediaKind } from "./store.ts";
+import { tempFileFrom } from "./temp-file.ts";
 
 export type SavedFile = {
   name: string;
@@ -27,37 +24,21 @@ export async function createRequestTempFile(
     return { file: undefined, closeFile: closeNothing };
   }
 
-  const dir = await mkdtemp(path.join(tmpdir(), "upload-"));
-  const dest = path.join(dir, "upload");
-  const writer = createWriteStream(dest);
-  const closeFile = () => rm(dir, { recursive: true, force: true });
-  try {
-    for await (const chunk of request.body) {
-      if (!writer.write(chunk)) {
-        await once(writer, "drain");
-      }
-    }
-    writer.end();
-    await once(writer, "finish");
-    const { size } = await stat(dest);
-    if (size === 0) {
-      await closeFile();
-      return { file: undefined, closeFile: closeNothing };
-    }
-    return {
-      file: {
-        name: meta.name || "video",
-        type: meta.type,
-        size,
-        path: dest,
-      },
-      closeFile,
-    };
-  } catch (error) {
-    writer.destroy();
-    await closeFile();
-    throw error;
+  const temp = await tempFileFrom(request.body, "upload-", "upload");
+  const { size } = await stat(temp.path);
+  if (size === 0) {
+    await temp.close();
+    return { file: undefined, closeFile: closeNothing };
   }
+  return {
+    file: {
+      name: meta.name || "video",
+      type: meta.type,
+      size,
+      path: temp.path,
+    },
+    closeFile: temp.close,
+  };
 }
 
 function fileExtension(name: string) {

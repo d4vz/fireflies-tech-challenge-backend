@@ -1,51 +1,32 @@
 import { z } from "zod";
-import type { OwnerId } from "../../lib/auth/index.ts";
-import { withMeetingName } from "./meeting-name.ts";
-import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
-import type { TaskStatus } from "./tasks.ts";
+import type { Actor } from "../../lib/auth/index.ts";
+import { fromBeforeTo, pageQuerySchema, skipOf, type Page, type PageQuery } from "./page.ts";
+import { withPublicCard } from "./public-meeting.ts";
+import type { Meeting, MeetingQuery, MeetingStatus, Meetings } from "./store.ts";
 import type { WithId } from "mongodb";
 
-export type MeetingListQuery = {
-  page: number;
-  limit: number;
+export type MeetingListQuery = PageQuery & {
   from?: Date;
   to?: Date;
   status?: MeetingStatus;
   sourceId?: string;
 };
 
-export type MeetingFilter = {
-  from?: Date;
-  to?: Date;
-  status?: MeetingStatus;
-  sourceId?: string;
-  userId?: OwnerId;
-  taskStatus?: TaskStatus;
-  hasTasks?: boolean;
-};
+export type MeetingFilter = MeetingQuery;
 
-export type MeetingListPage = {
-  items: WithId<Meeting>[];
-  total: number;
-  page: number;
-  limit: number;
-};
+export type MeetingListPage = Page<WithId<Meeting>>;
 
-export const meetingListQuerySchema: z.ZodType<MeetingListQuery> = z
-  .object({
-    page: z.coerce.number().int().positive().default(1),
-    limit: z.coerce.number().int().positive().max(50).default(10),
+export const meetingListQuerySchema: z.ZodType<MeetingListQuery> = pageQuerySchema
+  .extend({
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
     status: z.enum(["queued", "processing", "ready", "failed"]).optional(),
     sourceId: z.string().min(1).optional(),
   })
-  .refine((query) => query.from === undefined || query.to === undefined || query.from < query.to, {
-    message: "from must be before to",
-  });
+  .refine(fromBeforeTo, { message: "from must be before to" });
 
-export function meetingFilter(query: MeetingListQuery): MeetingFilter {
-  const filter: MeetingFilter = {};
+export function meetingFilter(query: MeetingListQuery): MeetingQuery {
+  const filter: MeetingQuery = {};
   if (query.from !== undefined) {
     filter.from = query.from;
   }
@@ -61,19 +42,23 @@ export function meetingFilter(query: MeetingListQuery): MeetingFilter {
   return filter;
 }
 
-export function skipOf(query: MeetingListQuery): number {
-  return (query.page - 1) * query.limit;
-}
+export { skipOf };
 
 export async function listMeetings(
-  store: Pick<MeetingsStore, "list" | "count">,
+  meetings: Meetings,
+  actor: Actor,
   query: MeetingListQuery,
 ): Promise<MeetingListPage> {
   const filter = meetingFilter(query);
   const skip = skipOf(query);
   const [items, total] = await Promise.all([
-    store.list(skip, query.limit, filter),
-    store.count(filter),
+    meetings.list(actor, skip, query.limit, filter),
+    meetings.count(actor, filter),
   ]);
-  return { items: items.map(withMeetingName), total, page: query.page, limit: query.limit };
+  return {
+    items: items.map(withPublicCard),
+    total,
+    page: query.page,
+    limit: query.limit,
+  };
 }

@@ -8,7 +8,6 @@ import type { ActionListQuery } from "../meetings/actions-query.ts";
 import type { MeetingListQuery } from "../meetings/list-query.ts";
 import {
   meetingTranscriptSearchQuerySchema,
-  type MeetingTranscriptSearchQuery,
   type TranscriptSearchQuery,
 } from "../meetings/search.ts";
 
@@ -45,9 +44,6 @@ test("listMeetings execute does not take sourceId", async () => {
     searchTranscripts: async () => {
       throw new Error("unused");
     },
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
-    },
   });
   const execute = tools.listMeetings.execute;
   assert.ok(execute);
@@ -73,9 +69,6 @@ test("listMeetings tool execute maps ISO datetimes onto MeetingListQuery dates",
       throw new Error("unused");
     },
     searchTranscripts: async () => {
-      throw new Error("unused");
-    },
-    searchMeetingTranscripts: async () => {
       throw new Error("unused");
     },
   });
@@ -114,9 +107,6 @@ test("listMeetings tool execute calls the injected listMeetings function", async
     searchTranscripts: async () => {
       throw new Error("unused");
     },
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
-    },
   });
   const query = { page: 2, limit: 5, status: "queued" as const };
   const execute = tools.listMeetings.execute;
@@ -143,9 +133,6 @@ test("searchTranscripts tool execute calls the injected searchTranscripts functi
     searchTranscripts: async (query) => {
       seen.push(query);
       return [];
-    },
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
     },
   });
   const query: TranscriptSearchQuery = { query: "billing", limit: 8 };
@@ -193,9 +180,6 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
     searchTranscripts: async () => {
       throw new Error("unused");
     },
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
-    },
   });
   const execute = tools.listMeetings.execute;
   assert.ok(execute);
@@ -209,6 +193,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
         createdAt: "2026-09-01T03:33:00.000Z",
         status: "ready",
         href: "/meetings/6a963d4f786296c73b01d6d0",
+        mediaKind: "video",
         summary: { text: "hello", takeaways: [] },
       },
     ],
@@ -238,9 +223,6 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
         score: 0.91,
       },
     ],
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
-    },
   });
   const execute = tools.searchTranscripts.execute;
   assert.ok(execute);
@@ -260,7 +242,7 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
 });
 
 test("searchMeetingTranscripts execute forwards meetingId and query", async () => {
-  const seen: MeetingTranscriptSearchQuery[] = [];
+  const seen: TranscriptSearchQuery[] = [];
   const tools = createAskFredTools({
     model: "openai/gpt-4o-mini",
     listMeetings: async () => {
@@ -269,10 +251,7 @@ test("searchMeetingTranscripts execute forwards meetingId and query", async () =
     listActions: async () => {
       throw new Error("unused");
     },
-    searchTranscripts: async () => {
-      throw new Error("unused");
-    },
-    searchMeetingTranscripts: async (query) => {
+    searchTranscripts: async (query) => {
       seen.push(query);
       return [];
     },
@@ -295,10 +274,7 @@ test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app h
     listActions: async () => {
       throw new Error("unused");
     },
-    searchTranscripts: async () => {
-      throw new Error("unused");
-    },
-    searchMeetingTranscripts: async () => [
+    searchTranscripts: async () => [
       {
         meetingId: "6a963d4f786296c73b01d6d0",
         sourceId: "screen-recording.webm",
@@ -344,9 +320,6 @@ test("listActions tool execute calls the injected listActions function", async (
     searchTranscripts: async () => {
       throw new Error("unused");
     },
-    searchMeetingTranscripts: async () => {
-      throw new Error("unused");
-    },
   });
   const execute = tools.listActions.execute;
   assert.ok(execute);
@@ -384,9 +357,6 @@ test("listActions tool execute returns grouped JSON-safe tasks", async () => {
       limit: query.limit,
     }),
     searchTranscripts: async () => {
-      throw new Error("unused");
-    },
-    searchMeetingTranscripts: async () => {
       throw new Error("unused");
     },
   });

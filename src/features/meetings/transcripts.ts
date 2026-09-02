@@ -33,7 +33,7 @@ export type TranscriptsStore = {
   searchByEmbedding: (
     embedding: number[],
     limit: number,
-    meetingId?: string,
+    meetingIds?: string[],
   ) => Promise<TranscriptChunkHit[]>;
   ensureVectorIndex: () => Promise<void>;
 };
@@ -84,8 +84,19 @@ type VectorSearchStage = {
   queryVector: number[];
   numCandidates: number;
   limit: number;
-  filter?: { meetingId: ObjectId };
+  filter?: { meetingId: { $in: ObjectId[] } };
 };
+
+function objectIdsOf(meetingIds: string[]): ObjectId[] | undefined {
+  const ids: ObjectId[] = [];
+  for (const meetingId of meetingIds) {
+    if (!ObjectId.isValid(meetingId)) {
+      return undefined;
+    }
+    ids.push(new ObjectId(meetingId));
+  }
+  return ids;
+}
 
 function isIndexExistsError(error: unknown): error is Error {
   if (error instanceof MongoServerError && (error.code === 68 || error.code === 48)) {
@@ -148,8 +159,8 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         .sort({ index: 1 })
         .toArray();
     },
-    searchByEmbedding: async (embedding, limit, meetingId) => {
-      if (meetingId !== undefined && !ObjectId.isValid(meetingId)) {
+    searchByEmbedding: async (embedding, limit, meetingIds) => {
+      if (meetingIds !== undefined && meetingIds.length === 0) {
         return [];
       }
       const stage: VectorSearchStage = {
@@ -159,8 +170,12 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         numCandidates: Math.max(limit * 10, 10),
         limit,
       };
-      if (meetingId !== undefined) {
-        stage.filter = { meetingId: new ObjectId(meetingId) };
+      if (meetingIds !== undefined) {
+        const ids = objectIdsOf(meetingIds);
+        if (ids === undefined) {
+          return [];
+        }
+        stage.filter = { meetingId: { $in: ids } };
       }
       const rows = await collection
         .aggregate<VectorHit>([
