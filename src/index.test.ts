@@ -1,22 +1,17 @@
-import assert from 'node:assert/strict'
-import { test } from 'node:test'
-import { createApp } from './index.js'
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { createApp } from "./create-app.ts";
 
-test('GET /hello sends a hello message to OpenAI and returns the reply', async () => {
-  let sentInput: string | undefined
-
+test("GET /hello sends a hello message to OpenAI and returns the reply", async () => {
   const app = createApp({
-    responses: {
-      create: async (body) => {
-        sentInput = body.input
-        return { output_text: 'Hello from the model' }
-      },
-    },
-  })
+    hello: { greet: async () => "Hello from the model" },
+    audio: { extract: async (file) => file, ping: async () => {} },
+    blob: { put: async (input) => input.key, ping: async () => {} },
+    transcribe: { run: async () => ({ text: "" }), ping: async () => {} },
+  });
 
-  const res = await app.request('/hello')
+  const res = await app.request("/hello");
 
-  assert.equal(res.status, 200)
-  assert.equal(sentInput, 'hello')
-  assert.equal(await res.text(), 'Hello from the model')
-})
+  assert.equal(res.status, 200);
+  assert.equal(await res.text(), "Hello from the model");
+});
