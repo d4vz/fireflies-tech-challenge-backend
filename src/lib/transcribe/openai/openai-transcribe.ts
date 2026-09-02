@@ -1,13 +1,17 @@
-import OpenAI from "openai";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import OpenAI, { toFile } from "openai";
 import type { Transcribe } from "../index.ts";
 
-export function createOpenaiTranscribe(): Transcribe {
+export function createOpenaiTranscribe(model: string): Transcribe {
   const client = new OpenAI();
   return {
-    run: async (file) => {
+    run: async (audioPath) => {
       const transcription = await client.audio.transcriptions.create({
-        file,
-        model: "gpt-4o-transcribe",
+        file: await toFile(await readFile(audioPath), path.basename(audioPath), {
+          type: "audio/mpeg",
+        }),
+        model,
       });
       return { text: transcription.text };
     },

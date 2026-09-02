@@ -1,6 +1,5 @@
 export type Video = {
-  extract: (file: File) => Promise<File>;
-  durationInSeconds: (file: File) => Promise<number>;
-  thumbnail: (file: File) => Promise<File>;
-  ping: () => Promise<void>;
+  extract: (inputPath: string) => Promise<string>;
+  durationInSeconds: (inputPath: string) => Promise<number>;
+  thumbnail: (inputPath: string) => Promise<File>;
 };

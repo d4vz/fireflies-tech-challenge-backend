@@ -1,0 +1,19 @@
+chunkSize: 500
+models:
+  transcribe: gpt-4o-transcribe
+  summary: gpt-4o-mini
+  embed: text-embedding-3-small
+upload:
+  maxFileBytes: 5368709120
+  mimeTypes:
+    - video/mp4
+    - video/webm
+    - video/quicktime
+    - video/x-matroska
+    - video/x-m4v
+  extensions:
+    - mp4
+    - webm
+    - mov
+    - mkv
+    - m4v

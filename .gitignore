@@ -30,7 +30,3 @@ lerna-debug.log*
 .vercel
 .railway
 .env*
-
-# generated
-transcripts/*
-!transcripts/.gitkeep
