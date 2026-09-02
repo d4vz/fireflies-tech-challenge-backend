@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createWriteStream } from "node:fs";
-import { mkdtemp, stat } from "node:fs/promises";
+import { mkdtemp, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { finished } from "node:stream/promises";
@@ -60,6 +60,70 @@ async function writeSample(dir: string) {
     samplePath,
   ]);
   return samplePath;
+}
+
+async function runStdout(command: string, args: string[]) {
+  const chunks: Buffer[] = [];
+  const child = spawn(command, args);
+  child.stdout.on("data", (chunk: Buffer) => {
+    chunks.push(chunk);
+  });
+  await new Promise<void>((resolve, reject) => {
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+      reject(new Error(`${command} exited with ${code}`));
+    });
+  });
+  return Buffer.concat(chunks);
+}
+
+async function writeTwoTone(dir: string, blackSeconds: number, redSeconds: number) {
+  const dest = path.join(dir, "clip.mp4");
+  await run("ffmpeg", [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    `color=c=black:s=320x240:d=${blackSeconds}:r=10`,
+    "-f",
+    "lavfi",
+    "-i",
+    `color=c=red:s=320x240:d=${redSeconds}:r=10`,
+    "-filter_complex",
+    "[0:v][1:v]concat=n=2:v=1:a=0",
+    "-pix_fmt",
+    "yuv420p",
+    dest,
+  ]);
+  return dest;
+}
+
+async function firstPixel(jpeg: File) {
+  const dir = await mkdtemp(path.join(tmpdir(), "thumb-"));
+  const jpegPath = path.join(dir, "thumb.jpg");
+  await writeFile(jpegPath, Buffer.from(await jpeg.arrayBuffer()));
+  const raw = await runStdout("ffmpeg", [
+    "-v",
+    "error",
+    "-i",
+    jpegPath,
+    "-f",
+    "rawvideo",
+    "-pix_fmt",
+    "rgb24",
+    "pipe:1",
+  ]);
+  return { r: raw[0], g: raw[1], b: raw[2] };
+}
+
+function assertRed(pixel: { r: number; g: number; b: number }) {
+  assert.ok(pixel.r > 200, `expected red, got r=${pixel.r} g=${pixel.g} b=${pixel.b}`);
+  assert.ok(pixel.g < 50, `expected red, got r=${pixel.r} g=${pixel.g} b=${pixel.b}`);
+  assert.ok(pixel.b < 50, `expected red, got r=${pixel.r} g=${pixel.g} b=${pixel.b}`);
 }
 
 async function convertSample(samplePath: string, destPath: string) {
@@ -199,4 +263,24 @@ test("ffmpeg extract fails with a short message when the clip has no audio", asy
   const video = createFfmpegVideo();
 
   await assert.rejects(() => video.extract(videoPath), { message: "Could not extract audio" });
+});
+
+test("ffmpeg thumbnail is taken at 3 seconds, not the black start", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+  const videoPath = await writeTwoTone(dir, 2, 4);
+  const video = createFfmpegVideo();
+
+  const thumb = await video.thumbnail(videoPath);
+
+  assertRed(await firstPixel(thumb));
+});
+
+test("ffmpeg thumbnail on a 2 second clip uses a late frame, not the black start", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+  const videoPath = await writeTwoTone(dir, 1, 1);
+  const video = createFfmpegVideo();
+
+  const thumb = await video.thumbnail(videoPath);
+
+  assertRed(await firstPixel(thumb));
 });
