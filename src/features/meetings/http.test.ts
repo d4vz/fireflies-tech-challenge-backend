@@ -15,10 +15,16 @@ models:
   chat: gpt-4o-mini
 upload:
   maxFileBytes: 100
-  mimeTypes:
-    - video/mp4
-  extensions:
-    - mp4
+  video:
+    mimeTypes:
+      - video/mp4
+    extensions:
+      - mp4
+  audio:
+    mimeTypes:
+      - audio/mpeg
+    extensions:
+      - mp3
 `);
 
 function sampleMeeting(sourceId: string): WithId<Meeting> {
@@ -29,6 +35,7 @@ function sampleMeeting(sourceId: string): WithId<Meeting> {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     status: "ready",
     blob: {
+      kind: "video",
       url: "/v",
       durationInSeconds: 1,
       sizeInBytes: 1,

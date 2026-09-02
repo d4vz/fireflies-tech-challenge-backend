@@ -72,28 +72,32 @@ async function formatDuration(inputPath: string) {
       "default=noprint_wrappers=1:nokey=1",
       inputPath,
     ],
-    "Could not read video duration",
+    "Could not read media duration",
   );
   return parseSeconds(output);
 }
 
-async function packetDuration(inputPath: string) {
-  const output = await run(
-    "ffprobe",
-    [
-      "-v",
-      "error",
-      "-select_streams",
-      "v:0",
-      "-show_entries",
-      "packet=pts_time,duration_time",
-      "-of",
-      "csv=p=0",
-      inputPath,
-    ],
-    "Could not read video duration",
-  );
-  return lastPacketEnd(output);
+async function packetDuration(inputPath: string, stream: "v:0" | "a:0") {
+  try {
+    const output = await run(
+      "ffprobe",
+      [
+        "-v",
+        "error",
+        "-select_streams",
+        stream,
+        "-show_entries",
+        "packet=pts_time,duration_time",
+        "-of",
+        "csv=p=0",
+        inputPath,
+      ],
+      "Could not read media duration",
+    );
+    return lastPacketEnd(output);
+  } catch {
+    return undefined;
+  }
 }
 
 export function createFfmpegVideo(): Video {
@@ -108,9 +112,12 @@ export function createFfmpegVideo(): Video {
       return outputPath;
     },
     durationInSeconds: async (inputPath) => {
-      const seconds = (await formatDuration(inputPath)) ?? (await packetDuration(inputPath));
+      const seconds =
+        (await formatDuration(inputPath)) ??
+        (await packetDuration(inputPath, "v:0")) ??
+        (await packetDuration(inputPath, "a:0"));
       if (seconds === undefined) {
-        throw new Error("Could not read video duration");
+        throw new Error("Could not read media duration");
       }
       return Math.round(seconds);
     },
