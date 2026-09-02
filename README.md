@@ -113,6 +113,10 @@ curl -fsSL https://bun.sh/install | bash
 
 I used the Atlas local image so `$vectorSearch` works on your machine. ffmpeg is already in the API image.
 
+The parent repository can start this file together with the frontend. From the parent root, copy `.env.example` to `.env` and run `docker compose up --build`.
+
+To start only the backend:
+
 ```
 cp .env.example .env
 ```
