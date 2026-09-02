@@ -8,6 +8,7 @@ import type { Blob } from "../index.ts";
 
 export type MinioBlobConfig = {
   endpoint: string;
+  publicEndpoint: string;
   accessKey: string;
   secretKey: string;
   bucket: string;
@@ -44,7 +45,8 @@ export function createMinioBlob(config: MinioBlobConfig): Blob {
           ContentType: input.contentType,
         }),
       );
-      return input.key;
+      const base = config.publicEndpoint.replace(/\/$/, "");
+      return `${base}/${config.bucket}/${input.key}`;
     },
     ping: () => ensureBucket(client, config.bucket),
   };
@@ -59,5 +61,12 @@ export function minioBlobFromEnv(): Blob {
   if (!endpoint || !accessKey || !secretKey || !bucket) {
     throw new Error("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET are required");
   }
-  return createMinioBlob({ endpoint, accessKey, secretKey, bucket, region });
+  return createMinioBlob({
+    endpoint,
+    publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? endpoint,
+    accessKey,
+    secretKey,
+    bucket,
+    region,
+  });
 }

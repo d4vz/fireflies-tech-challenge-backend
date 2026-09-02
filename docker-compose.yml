@@ -11,5 +11,23 @@ services:
     volumes:
       - minio-data:/data
 
+  # Official local image: mongod + mongot in one container so $vectorSearch works.
+  # URI: mongodb://fireflies:fireflies@localhost:27017/fireflies?authSource=admin&directConnection=true
+  mongodb:
+    image: mongodb/mongodb-atlas-local:preview
+    hostname: mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGODB_INITDB_ROOT_USERNAME: fireflies
+      MONGODB_INITDB_ROOT_PASSWORD: fireflies
+    volumes:
+      - mongo-db:/data/db
+      - mongo-configdb:/data/configdb
+      - mongo-mongot:/data/mongot
+
 volumes:
   minio-data:
+  mongo-db:
+  mongo-configdb:
+  mongo-mongot:
