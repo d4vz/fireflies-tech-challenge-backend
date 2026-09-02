@@ -54,6 +54,6 @@ export function startMeetingsWorker(redisUrl: string, processJob: ProcessMeeting
         throw new UnrecoverableError(message);
       }
     },
-    { connection: redisConnection(redisUrl), concurrency: 1 },
+    { connection: redisConnection(redisUrl), concurrency: 3 },
   );
 }
