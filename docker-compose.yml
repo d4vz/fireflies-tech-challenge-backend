@@ -10,9 +10,16 @@ services:
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio-data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   # Official local image: mongod + mongot in one container so $vectorSearch works.
-  # URI: mongodb://fireflies:fireflies@localhost:27017/fireflies?authSource=admin&directConnection=true
+  # Host: mongodb://fireflies:fireflies@localhost:27017/fireflies?authSource=admin&directConnection=true
+  # api service: use the mongodb hostname on the compose network.
   mongodb:
     image: mongodb/mongodb-atlas-local:preview
     hostname: mongodb
@@ -30,6 +37,35 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    ports:
+      - "3000:3000"
+    env_file:
+      - path: .env
+        required: false
+      - path: .env.local
+        required: false
+    environment:
+      MONGODB_URI: mongodb://fireflies:fireflies@mongodb:27017/fireflies?authSource=admin&directConnection=true
+      REDIS_URL: redis://redis:6379
+      S3_ENDPOINT: http://minio:9000
+      S3_PUBLIC_ENDPOINT: http://localhost:9000
+      PORT: "3000"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: on-failure
 
 volumes:
   minio-data:

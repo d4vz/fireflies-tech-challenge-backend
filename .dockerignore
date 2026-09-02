@@ -1,0 +1,15 @@
+node_modules
+.worktrees
+.git
+.husky
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+.vscode
+.idea
+.railway
+README.md
+AGENTS.md
+**/*.test.ts
