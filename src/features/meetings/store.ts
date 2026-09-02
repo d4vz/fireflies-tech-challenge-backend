@@ -34,6 +34,7 @@ export type Meeting = {
   userId: OwnerId;
   sourceType: "upload";
   sourceId: string;
+  name?: string;
   createdAt: Date;
   status: MeetingStatus;
   summary?: StoredMeetingSummary;

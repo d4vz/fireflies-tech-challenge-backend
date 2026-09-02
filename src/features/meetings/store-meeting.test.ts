@@ -59,6 +59,8 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
   assert.equal(thumbnailCalls, 0);
   assert.deepEqual(keys, ["meetings/6a963d4f786296c73b01d6d0/video"]);
   assert.equal(meeting.blob.kind, "audio");
+  assert.equal(meeting.name, "talk");
+  assert.equal(meeting.sourceId, "talk.mp3");
   assert.equal(meeting.userId, ownerId("user_a"));
   assert.equal(inserted[0]?.blob.kind, "audio");
   assert.equal(inserted[0]?.userId, ownerId("user_a"));

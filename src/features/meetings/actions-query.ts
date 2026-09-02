@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { MeetingFilter } from "./list-query.ts";
+import { meetingName } from "./meeting-name.ts";
 import type { MeetingsStore } from "./store.ts";
 import {
   matchingTasks,
@@ -17,6 +18,7 @@ export type ActionListQuery = {
 export type ActionGroup = {
   meetingId: string;
   sourceId: string;
+  name: string;
   createdAt: string;
   href: string;
   mediaKind: "video" | "audio";
@@ -63,6 +65,7 @@ export async function listActions(
       return {
         meetingId,
         sourceId: meeting.sourceId,
+        name: meetingName(meeting.sourceId, meeting.name),
         createdAt: meeting.createdAt.toISOString(),
         href: meetingHref(meetingId),
         mediaKind: meeting.blob.kind === "audio" ? "audio" : "video",

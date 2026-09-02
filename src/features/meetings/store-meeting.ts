@@ -3,6 +3,7 @@ import type { Actor } from "../../lib/auth/index.ts";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
+import { meetingName } from "./meeting-name.ts";
 import type { ClassifiedFile } from "./upload-file.ts";
 import {
   meetingThumbnailKey,
@@ -33,7 +34,12 @@ async function storeThumbnail(
   });
 }
 
-export async function storeMeeting(deps: StoreMeetingDeps, file: ClassifiedFile, actor: Actor) {
+export async function storeMeeting(
+  deps: StoreMeetingDeps,
+  file: ClassifiedFile,
+  actor: Actor,
+  name?: string,
+) {
   const { video, blob, meetings, queue } = deps;
   const _id = meetings.createId();
   const id = _id.toHexString();
@@ -85,6 +91,7 @@ export async function storeMeeting(deps: StoreMeetingDeps, file: ClassifiedFile,
     userId: actor.id,
     sourceType: "upload" as const,
     sourceId: file.name || "video",
+    name: meetingName(file.name || "video", name),
     createdAt: new Date(),
     status: "queued" as const,
     blob: meetingBlob,

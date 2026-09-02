@@ -145,6 +145,7 @@ test("listActions pages meeting groups and keeps only matching tasks", async () 
   assert.equal(page.total, 2);
   assert.equal(page.items.length, 2);
   assert.equal(page.items[0]?.sourceId, "newer.mp4");
+  assert.equal(page.items[0]?.name, "newer");
   assert.deepEqual(
     page.items[0]?.tasks.map((item) => item.text),
     ["open"],

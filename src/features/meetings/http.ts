@@ -8,7 +8,8 @@ import type { AppSettings } from "../../lib/config/index.ts";
 import type { AppEnv } from "../../lib/middleware/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
-import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
+import { createRequestTempFile, classifyUpload } from "./upload-file.ts";
+import { withMeetingName } from "./meeting-name.ts";
 import { storeMeeting } from "./store-meeting.ts";
 import {
   meetingThumbnailKey,
@@ -98,7 +99,7 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
     if (!meeting) {
       return c.json({ error: "meeting not found" }, 404);
     }
-    return c.json(meeting);
+    return c.json(withMeetingName(meeting));
   });
 
   app.patch("/meetings/:id/tasks/:taskId", zValidator("json", taskStatusSchema), async (c) => {
@@ -131,14 +132,15 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
         return c.json({ error: "file is required" }, 400);
       }
 
-      if (!isAllowedFormat(file, deps.settings.upload)) {
+      const classified = classifyUpload(file, deps.settings.upload);
+      if (classified === undefined) {
         await closeFile();
         return c.json({ error: "file format is not supported" }, 400);
       }
 
       try {
-        const meeting = await storeMeeting(deps, file, c.get("actor"));
-        return c.json(meeting, 201);
+        const meeting = await storeMeeting(deps, classified, c.get("actor"), c.req.query("name"));
+        return c.json(withMeetingName(meeting), 201);
       } finally {
         await closeFile();
       }

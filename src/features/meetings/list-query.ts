@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { OwnerId } from "../../lib/auth/index.ts";
+import { withMeetingName } from "./meeting-name.ts";
 import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
 import type { TaskStatus } from "./tasks.ts";
 import type { WithId } from "mongodb";
@@ -74,5 +75,5 @@ export async function listMeetings(
     store.list(skip, query.limit, filter),
     store.count(filter),
   ]);
-  return { items, total, page: query.page, limit: query.limit };
+  return { items: items.map(withMeetingName), total, page: query.page, limit: query.limit };
 }
