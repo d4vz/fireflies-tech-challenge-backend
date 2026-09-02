@@ -1,4 +1,9 @@
-import { CreateBucketCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import {
+  CreateBucketCommand,
+  GetObjectCommand,
+  HeadBucketCommand,
+  S3Client,
+} from "@aws-sdk/client-s3";
 import { Upload } from "@aws-sdk/lib-storage";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { parseSecrets } from "../../config/index.ts";
@@ -19,6 +24,10 @@ async function ensureBucket(client: S3Client, bucket: string) {
   } catch {
     await client.send(new CreateBucketCommand({ Bucket: bucket }));
   }
+}
+
+function isMissingKey(error: Error) {
+  return error.name === "NoSuchKey" || error.name === "NotFound";
 }
 
 function contentLength(input: PutBlob) {
@@ -60,6 +69,28 @@ export function createMinioBlob(config: MinioBlobConfig): Blob {
       }).done();
       const base = config.publicEndpoint.replace(/\/$/, "");
       return `${base}/${config.bucket}/${input.key}`;
+    },
+    get: async (key) => {
+      try {
+        const stored = await client.send(
+          new GetObjectCommand({
+            Bucket: config.bucket,
+            Key: key,
+          }),
+        );
+        if (!stored.Body) {
+          return undefined;
+        }
+        return {
+          body: stored.Body.transformToWebStream(),
+          contentType: stored.ContentType ?? "application/octet-stream",
+        };
+      } catch (error) {
+        if (error instanceof Error && isMissingKey(error)) {
+          return undefined;
+        }
+        throw error;
+      }
     },
     ping: () => ensureBucket(client, config.bucket),
   };

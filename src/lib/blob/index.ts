@@ -7,7 +7,13 @@ export type PutBlob = {
   size?: number;
 };
 
+export type GetBlob = {
+  body: ReadableStream<Uint8Array>;
+  contentType: string;
+};
+
 export type Blob = {
   put: (input: PutBlob) => Promise<string>;
+  get: (key: string) => Promise<GetBlob | undefined>;
   ping: () => Promise<void>;
 };

@@ -27,6 +27,7 @@ export type Meeting = {
 export type MeetingsStore = {
   createId: () => ObjectId;
   insert: (meeting: WithId<Meeting>) => Promise<void>;
+  get: (id: string) => Promise<WithId<Meeting> | null>;
   list: () => Promise<WithId<Meeting>[]>;
 };
 
@@ -56,6 +57,12 @@ export function createMeetingsStore(client: MongoClient): MeetingsStore {
     createId: () => new ObjectId(),
     insert: async (meeting) => {
       await collection.insertOne(meeting);
+    },
+    get: async (id) => {
+      if (!ObjectId.isValid(id)) {
+        return null;
+      }
+      return collection.findOne({ _id: new ObjectId(id) });
     },
     list: async () => collection.find().sort({ createdAt: -1 }).toArray(),
   };

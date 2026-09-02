@@ -1,18 +1,52 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { SSEStreamingApi, streamSSE } from "hono/streaming";
+import type { Blob } from "../../lib/blob/index.ts";
 import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
-import {
-  UploadEvent,
-  uploadMeeting,
-  UploadStage,
-  type UploadMeetingDeps,
-} from "./upload-meeting.ts";
-import { Meeting } from "./store.ts";
+import { UploadEvent, uploadMeeting, type UploadMeetingDeps } from "./upload-meeting.ts";
+import { meetingThumbnailKey, meetingVideoKey } from "./store.ts";
+
+async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
+  const file = await blob.get(key);
+  if (!file) {
+    return undefined;
+  }
+  return new Response(file.body, {
+    headers: {
+      "Content-Type": file.contentType || fallbackType,
+      "Cache-Control": "private, max-age=3600",
+    },
+  });
+}
 
 export function mountMeetings(app: Hono, deps: UploadMeetingDeps) {
   app.get("/meetings", async (c) => {
     return c.json(await deps.meetings.list());
+  });
+
+  app.get("/meetings/:id/thumbnail", async (c) => {
+    return (
+      (await sendStoredObject(deps.blob, meetingThumbnailKey(c.req.param("id")), "image/jpeg")) ??
+      c.json({ error: "not found" }, 404)
+    );
+  });
+
+  app.get("/meetings/:id/video", async (c) => {
+    return (
+      (await sendStoredObject(
+        deps.blob,
+        meetingVideoKey(c.req.param("id")),
+        "application/octet-stream",
+      )) ?? c.json({ error: "not found" }, 404)
+    );
+  });
+
+  app.get("/meetings/:id", async (c) => {
+    const meeting = await deps.meetings.get(c.req.param("id"));
+    if (!meeting) {
+      return c.json({ error: "meeting not found" }, 404);
+    }
+    return c.json(meeting);
   });
 
   app.post(
@@ -48,35 +82,20 @@ const handleMeetingResults = async (
   stream: SSEStreamingApi,
   closeFile: () => Promise<void>,
 ) => {
-  const actions = {
-    progress: async ({ stage }: { stage: UploadStage }) => {
-      await stream.writeSSE({
-        event: "progress",
-        data: JSON.stringify({ stage }),
-      });
-    },
-    done: async ({ meeting }: { meeting: Meeting }) => {
-      await stream.writeSSE({
-        event: "done",
-        data: JSON.stringify(meeting),
-      });
-    },
-    error: async ({ error }: { error: Error }) => {
-      await stream.writeSSE({
-        event: "error",
-        data: JSON.stringify({ error: error.message }),
-      });
-    },
-  };
-
   try {
     for await (const item of results) {
       switch (item.event) {
         case "progress":
-          await actions.progress({ stage: item.stage });
+          await stream.writeSSE({
+            event: "progress",
+            data: JSON.stringify({ stage: item.stage }),
+          });
           break;
         case "done":
-          await actions.done({ meeting: item.meeting });
+          await stream.writeSSE({
+            event: "done",
+            data: JSON.stringify(item.meeting),
+          });
           break;
       }
     }
