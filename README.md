@@ -38,6 +38,8 @@ The worker marks the meeting `processing`, pulls the file from MinIO, and extrac
 
 I tried OpenAI `gpt-4o-transcribe-diarize` first. A 5-minute clip took 133 seconds to transcribe. A 10-minute clip was still running after 15 minutes, then failed. That wait was OpenAI, not the queue. I switched to AssemblyAI. The same 10-minute file transcribed in 15 seconds, at least 60 times faster, with speaker labels on the whole file. A 5-minute file took 13 seconds.
 
+Files longer than about 10 minutes can stay `processing` for a long time. I found that while building this. Transcription is the slow step, and that wait is an OpenAI limitation, not the queue.
+
 ## Data
 
 Tasks live on the meeting document. Mongo's rule is [data that is accessed together is stored together](https://www.mongodb.com/docs/manual/data-modeling/). The meeting detail and the actions list both need those tasks, so a second collection would only add lookups.
