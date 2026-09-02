@@ -139,6 +139,9 @@ function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
     setReady: async () => {
       throw new Error("unused");
     },
+    setTaskStatus: async () => {
+      throw new Error("unused");
+    },
     setFailed: async () => {
       throw new Error("unused");
     },

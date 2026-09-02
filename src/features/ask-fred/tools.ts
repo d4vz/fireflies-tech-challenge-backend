@@ -2,6 +2,11 @@ import { tool, type LanguageModel } from "ai";
 import type { WithId } from "mongodb";
 import { z } from "zod";
 import {
+  actionListQuerySchema,
+  type ActionListPage,
+  type ActionListQuery,
+} from "../meetings/actions-query.ts";
+import {
   meetingListQuerySchema,
   type MeetingListPage,
   type MeetingListQuery,
@@ -18,6 +23,7 @@ import type { Meeting } from "../meetings/store.ts";
 export type AskFredDeps = {
   model: LanguageModel;
   listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
+  listActions: (query: ActionListQuery) => Promise<ActionListPage>;
   searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
   searchMeetingTranscripts: (query: MeetingTranscriptSearchQuery) => Promise<TranscriptHit[]>;
 };
@@ -87,6 +93,12 @@ export const listMeetingsToolSchema = z
     message: "from must be before to",
   });
 
+export const listActionsToolSchema = z.object({
+  page: z.number().int().positive().default(1),
+  limit: z.number().int().positive().max(50).default(10),
+  status: z.enum(["pending", "completed"]).optional(),
+});
+
 export function createAskFredTools(deps: AskFredDeps) {
   return {
     listMeetings: tool({
@@ -97,7 +109,6 @@ export function createAskFredTools(deps: AskFredDeps) {
         "Examples:",
         "- 'What's my day looking like?' → from=start of today, to=start of tomorrow (`to` is exclusive).",
         "- 'what is queued?' → status=queued.",
-        "- 'Pending tasks across all meetings' → list ready meetings and read summary.actionItems.",
       ].join(" "),
       inputSchema: listMeetingsToolSchema,
       execute: async (query) =>
@@ -106,6 +117,19 @@ export function createAskFredTools(deps: AskFredDeps) {
             meetingListQuerySchema.parse(listMeetingsToolSchema.parse(query)),
           ),
         ),
+    }),
+    listActions: tool({
+      description: [
+        "List action items grouped by meeting. Meetings have no title; identify them by sourceId.",
+        "Filter on status (pending | completed). Omit status for all tasks.",
+        "Each row is one meeting with the matching tasks. Tasks have id, text, status, and updatedAt.",
+        "Examples:",
+        "- 'Pending tasks across all meetings' → status=pending.",
+        "- 'what did I complete?' → status=completed.",
+      ].join(" "),
+      inputSchema: listActionsToolSchema,
+      execute: async (query) =>
+        deps.listActions(actionListQuerySchema.parse(listActionsToolSchema.parse(query))),
     }),
     searchTranscripts: tool({
       description: [

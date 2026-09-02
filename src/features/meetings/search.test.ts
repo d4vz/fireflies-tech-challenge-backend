@@ -86,6 +86,7 @@ test("searchTranscripts ranks by embedding, drops missing meetings, and omits em
     count: async () => unused(),
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   const transcripts: TranscriptsStore = {
@@ -160,6 +161,7 @@ test("searchMeetingTranscripts returns [] without embedding when the meeting is 
     count: async () => unused(),
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   const transcripts: TranscriptsStore = {
@@ -198,6 +200,7 @@ test("searchMeetingTranscripts stamps sourceId from the loaded meeting and passe
     count: async () => unused(),
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   const transcripts: TranscriptsStore = {
@@ -256,6 +259,7 @@ test("searchTranscripts does not return another user's hit", async () => {
     count: async () => unused(),
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   const transcripts: TranscriptsStore = {

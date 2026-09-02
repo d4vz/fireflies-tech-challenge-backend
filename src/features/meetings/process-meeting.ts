@@ -10,6 +10,7 @@ import type { Summarize } from "../../lib/summarize/index.ts";
 import type { Transcribe } from "../../lib/transcribe/index.ts";
 import type { Video } from "../../lib/video/index.ts";
 import { meetingVideoKey, type MeetingsStore } from "./store.ts";
+import { tasksFromActionItems } from "./tasks.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
 
 export type ProcessMeetingDeps = {
@@ -85,7 +86,8 @@ export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string
       })),
     );
     const summary = await summarize.run(text);
-    await meetings.setReady(meetingId, summary);
+    const tasks = tasksFromActionItems(summary.actionItems, meetings.createId, new Date());
+    await meetings.setReady(meetingId, { text: summary.text, takeaways: summary.takeaways }, tasks);
   } finally {
     await temp.close();
   }

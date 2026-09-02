@@ -3,7 +3,8 @@ import { test } from "node:test";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
 import { ownerId } from "../../lib/auth/index.ts";
-import { createAskFredTools, listMeetingsToolSchema } from "./tools.ts";
+import { createAskFredTools, listActionsToolSchema, listMeetingsToolSchema } from "./tools.ts";
+import type { ActionListQuery } from "../meetings/actions-query.ts";
 import type { MeetingListQuery } from "../meetings/list-query.ts";
 import {
   meetingTranscriptSearchQuerySchema,
@@ -22,6 +23,10 @@ test("listMeetings tool schema is JSON Schema representable", () => {
   assert.doesNotThrow(() => z.toJSONSchema(listMeetingsToolSchema));
 });
 
+test("listActions tool schema is JSON Schema representable", () => {
+  assert.doesNotThrow(() => z.toJSONSchema(listActionsToolSchema));
+});
+
 test("searchMeetingTranscripts tool schema is JSON Schema representable", () => {
   assert.doesNotThrow(() => z.toJSONSchema(meetingTranscriptSearchQuerySchema));
 });
@@ -33,6 +38,9 @@ test("listMeetings execute does not take sourceId", async () => {
     listMeetings: async (query) => {
       seen.push(query);
       return { items: [], total: 0, page: query.page, limit: query.limit };
+    },
+    listActions: async () => {
+      throw new Error("unused");
     },
     searchTranscripts: async () => {
       throw new Error("unused");
@@ -60,6 +68,9 @@ test("listMeetings tool execute maps ISO datetimes onto MeetingListQuery dates",
     listMeetings: async (query) => {
       seen.push(query);
       return { items: [], total: 0, page: query.page, limit: query.limit };
+    },
+    listActions: async () => {
+      throw new Error("unused");
     },
     searchTranscripts: async () => {
       throw new Error("unused");
@@ -97,6 +108,9 @@ test("listMeetings tool execute calls the injected listMeetings function", async
       seen.push(query);
       return { items: [], total: 0, page: query.page, limit: query.limit };
     },
+    listActions: async () => {
+      throw new Error("unused");
+    },
     searchTranscripts: async () => {
       throw new Error("unused");
     },
@@ -121,6 +135,9 @@ test("searchTranscripts tool execute calls the injected searchTranscripts functi
   const tools = createAskFredTools({
     model: "openai/gpt-4o-mini",
     listMeetings: async () => {
+      throw new Error("unused");
+    },
+    listActions: async () => {
       throw new Error("unused");
     },
     searchTranscripts: async (query) => {
@@ -155,7 +172,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
           sourceId: "screen-recording.webm",
           createdAt: new Date("2026-09-01T03:33:00.000Z"),
           status: "ready",
-          summary: { text: "hello", takeaways: [], actionItems: [] },
+          summary: { text: "hello", takeaways: [] },
           blob: {
             kind: "video",
             url: "http://127.0.0.1:9000/fireflies/meetings/6a963d4f786296c73b01d6d0/video",
@@ -170,6 +187,9 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
       page: query.page,
       limit: query.limit,
     }),
+    listActions: async () => {
+      throw new Error("unused");
+    },
     searchTranscripts: async () => {
       throw new Error("unused");
     },
@@ -188,7 +208,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
         createdAt: "2026-09-01T03:33:00.000Z",
         status: "ready",
         href: "/meetings/6a963d4f786296c73b01d6d0",
-        summary: { text: "hello", takeaways: [], actionItems: [] },
+        summary: { text: "hello", takeaways: [] },
       },
     ],
     total: 1,
@@ -201,6 +221,9 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
   const tools = createAskFredTools({
     model: "openai/gpt-4o-mini",
     listMeetings: async () => {
+      throw new Error("unused");
+    },
+    listActions: async () => {
       throw new Error("unused");
     },
     searchTranscripts: async () => [
@@ -240,6 +263,9 @@ test("searchMeetingTranscripts execute forwards meetingId and query", async () =
     listMeetings: async () => {
       throw new Error("unused");
     },
+    listActions: async () => {
+      throw new Error("unused");
+    },
     searchTranscripts: async () => {
       throw new Error("unused");
     },
@@ -261,6 +287,9 @@ test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app h
   const tools = createAskFredTools({
     model: "openai/gpt-4o-mini",
     listMeetings: async () => {
+      throw new Error("unused");
+    },
+    listActions: async () => {
       throw new Error("unused");
     },
     searchTranscripts: async () => {
@@ -294,4 +323,88 @@ test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app h
       href: "/meetings/6a963d4f786296c73b01d6d0",
     },
   ]);
+});
+
+test("listActions tool execute calls the injected listActions function", async () => {
+  const seen: ActionListQuery[] = [];
+  const tools = createAskFredTools({
+    model: "openai/gpt-4o-mini",
+    listMeetings: async () => {
+      throw new Error("unused");
+    },
+    listActions: async (query) => {
+      seen.push(query);
+      return { items: [], total: 0, page: query.page, limit: query.limit };
+    },
+    searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
+    },
+  });
+  const execute = tools.listActions.execute;
+  assert.ok(execute);
+  await execute({ page: 1, limit: 10, status: "pending" }, executeOptions);
+  assert.deepEqual(seen, [{ page: 1, limit: 10, status: "pending" }]);
+});
+
+test("listActions tool execute returns grouped JSON-safe tasks", async () => {
+  const tools = createAskFredTools({
+    model: "openai/gpt-4o-mini",
+    listMeetings: async () => {
+      throw new Error("unused");
+    },
+    listActions: async (query) => ({
+      items: [
+        {
+          meetingId: "6a963d4f786296c73b01d6d0",
+          sourceId: "screen-recording.webm",
+          createdAt: "2026-09-01T03:33:00.000Z",
+          href: "/meetings/6a963d4f786296c73b01d6d0",
+          tasks: [
+            {
+              _id: "6a963d4f786296c73b01d6d1",
+              text: "review notes",
+              status: "pending",
+              updatedAt: "2026-09-01T03:33:00.000Z",
+            },
+          ],
+        },
+      ],
+      total: 1,
+      page: query.page,
+      limit: query.limit,
+    }),
+    searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+    searchMeetingTranscripts: async () => {
+      throw new Error("unused");
+    },
+  });
+  const execute = tools.listActions.execute;
+  assert.ok(execute);
+  const grouped = await execute({ page: 1, limit: 10 }, executeOptions);
+  assert.deepEqual(grouped, {
+    items: [
+      {
+        meetingId: "6a963d4f786296c73b01d6d0",
+        sourceId: "screen-recording.webm",
+        createdAt: "2026-09-01T03:33:00.000Z",
+        href: "/meetings/6a963d4f786296c73b01d6d0",
+        tasks: [
+          {
+            _id: "6a963d4f786296c73b01d6d1",
+            text: "review notes",
+            status: "pending",
+            updatedAt: "2026-09-01T03:33:00.000Z",
+          },
+        ],
+      },
+    ],
+    total: 1,
+    page: 1,
+    limit: 10,
+  });
 });

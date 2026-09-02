@@ -72,10 +72,13 @@ function testAuth(): AuthVerify {
 
 function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
   listCalls: { skip: number; limit: number; filter: MeetingFilter }[];
+  statusWrites: { id: string; taskId: string; status: string }[];
 } {
   const listCalls: { skip: number; limit: number; filter: MeetingFilter }[] = [];
+  const statusWrites: { id: string; taskId: string; status: string }[] = [];
   return {
     listCalls,
+    statusWrites,
     createId: () => new ObjectId(),
     insert: async () => unused(),
     get: async (id) => items.find((item) => item._id.toHexString() === id) ?? null,
@@ -86,6 +89,20 @@ function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
     count: async () => items.length,
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async (id, taskId, status, at) => {
+      const meeting = items.find((item) => item._id.toHexString() === id);
+      const task = (meeting?.tasks ?? []).find((item) => item._id.toHexString() === taskId);
+      if (task === undefined) {
+        return { kind: "missing" };
+      }
+      if (task.status === status) {
+        return { kind: "unchanged", task };
+      }
+      statusWrites.push({ id, taskId, status });
+      task.status = status;
+      task.updatedAt = at;
+      return { kind: "updated", task };
+    },
     setFailed: async () => unused(),
   };
 }
@@ -242,4 +259,113 @@ test("GET /meetings/:id/transcripts as another user returns 404", async () => {
     headers: bearerAuth("user_b"),
   });
   assert.equal(res.status, 404);
+});
+
+test("GET /actions lists through listActions with hasTasks", async () => {
+  const meetings = fakeMeetingsStore([]);
+  const app = createApp(testDeps(meetings));
+  const res = await app.request("/actions?page=1&limit=10", { headers: bearerAuth("user_a") });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.page, 1);
+  assert.equal(body.limit, 10);
+  assert.deepEqual(meetings.listCalls[0]?.filter, { hasTasks: true, userId: ownerId("user_a") });
+});
+
+test("GET /actions?status=pending filters taskStatus", async () => {
+  const meetings = fakeMeetingsStore([]);
+  const app = createApp(testDeps(meetings));
+  const res = await app.request("/actions?status=pending", { headers: bearerAuth("user_a") });
+  assert.equal(res.status, 200);
+  assert.deepEqual(meetings.listCalls[0]?.filter, {
+    taskStatus: "pending",
+    userId: ownerId("user_a"),
+  });
+});
+
+test("GET /actions returns 400 for an unknown status", async () => {
+  const app = createApp(testDeps(fakeMeetingsStore([])));
+  const res = await app.request("/actions?status=ready", { headers: bearerAuth("user_a") });
+  assert.equal(res.status, 400);
+});
+
+test("PATCH /meetings/:id/tasks/:taskId marks a task completed", async () => {
+  const taskId = new ObjectId();
+  const meeting = sampleMeeting("keep.mp4");
+  meeting.tasks = [
+    {
+      _id: taskId,
+      text: "review notes",
+      status: "pending",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const meetings = fakeMeetingsStore([meeting]);
+  const app = createApp(testDeps(meetings));
+  const res = await app.request(
+    `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
+    {
+      method: "PATCH",
+      headers: { ...bearerAuth(meeting.userId), "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, "completed");
+  assert.equal(body._id, taskId.toHexString());
+  assert.equal(meetings.statusWrites.length, 1);
+});
+
+test("PATCH /meetings/:id/tasks/:taskId is a no-op when status matches", async () => {
+  const taskId = new ObjectId();
+  const meeting = sampleMeeting("keep.mp4");
+  meeting.tasks = [
+    {
+      _id: taskId,
+      text: "review notes",
+      status: "completed",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const meetings = fakeMeetingsStore([meeting]);
+  const app = createApp(testDeps(meetings));
+  const res = await app.request(
+    `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
+    {
+      method: "PATCH",
+      headers: { ...bearerAuth(meeting.userId), "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(res.status, 200);
+  assert.equal(meetings.statusWrites.length, 0);
+  const body = await res.json();
+  assert.equal(body.status, "completed");
+  assert.equal(body.updatedAt, "2026-09-01T12:00:00.000Z");
+});
+
+test("PATCH /meetings/:id/tasks/:taskId as another user returns 404", async () => {
+  const taskId = new ObjectId();
+  const meeting = sampleMeeting("keep.mp4", ownerId("user_a"));
+  meeting.tasks = [
+    {
+      _id: taskId,
+      text: "review notes",
+      status: "pending",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const meetings = fakeMeetingsStore([meeting]);
+  const app = createApp(testDeps(meetings));
+  const res = await app.request(
+    `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
+    {
+      method: "PATCH",
+      headers: { ...bearerAuth("user_b"), "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "completed" }),
+    },
+  );
+  assert.equal(res.status, 404);
+  assert.equal(meetings.statusWrites.length, 0);
 });

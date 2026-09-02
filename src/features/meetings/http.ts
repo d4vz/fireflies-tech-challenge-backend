@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import type { Actor } from "../../lib/auth/index.ts";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
@@ -16,7 +17,13 @@ import {
   type OwnedMeetings,
 } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
+import { listActions, actionListQuerySchema } from "./actions-query.ts";
 import { listMeetings, meetingListQuerySchema } from "./list-query.ts";
+import { toPublicMeetingTask } from "./tasks.ts";
+
+const taskStatusSchema = z.object({
+  status: z.enum(["pending", "completed"]),
+});
 
 export type MeetingsHttpDeps = {
   video: Video;
@@ -44,6 +51,10 @@ async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
 export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   app.get("/meetings", zValidator("query", meetingListQuerySchema), async (c) => {
     return c.json(await listMeetings(deps.ownedMeetings(c.get("actor")), c.req.valid("query")));
+  });
+
+  app.get("/actions", zValidator("query", actionListQuerySchema), async (c) => {
+    return c.json(await listActions(deps.ownedMeetings(c.get("actor")), c.req.valid("query")));
   });
 
   app.get("/meetings/:id/thumbnail", async (c) => {
@@ -88,6 +99,20 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
       return c.json({ error: "meeting not found" }, 404);
     }
     return c.json(meeting);
+  });
+
+  app.patch("/meetings/:id/tasks/:taskId", zValidator("json", taskStatusSchema), async (c) => {
+    const owned = deps.ownedMeetings(c.get("actor"));
+    const result = await owned.setTaskStatus(
+      c.req.param("id"),
+      c.req.param("taskId"),
+      c.req.valid("json").status,
+      new Date(),
+    );
+    if (result.kind === "missing") {
+      return c.json({ error: "not found" }, 404);
+    }
+    return c.json(toPublicMeetingTask(result.task));
   });
 
   app.post(

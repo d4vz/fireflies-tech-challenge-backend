@@ -9,7 +9,7 @@
 - `src/lib/<capability>/index.ts` is the interface. The vendor adapter lives under it: `src/lib/blob/minio/minio-blob.ts`, `src/lib/transcribe/openai/openai-transcribe.ts`, `src/lib/summarize/openai/openai-summarize.ts`, `src/lib/embed/openai/openai-embed.ts`, `src/lib/video/ffmpeg/ffmpeg-video.ts`, `src/lib/queue/bullmq/bullmq-queue.ts`, `src/lib/auth/clerk/clerk-jwt.ts`.
 - `src/lib/config` parses `config.yaml` (models, chunk size, upload limits) and `.env` secrets with Zod. Secrets do not belong in yaml.
 - `src/lib/middleware` holds shared Hono handlers. `create-app.ts` mounts them before routes. `requireActor` authenticates every route registered after `/health`.
-- `POST /meetings/upload` stores the video and a queued meeting, then enqueues processing. `GET /meetings` accepts `page`, `limit`, `from`, `to` (exclusive), `status`, and `sourceId` via zValidator and returns `{ items, total, page, limit }` newest first. `GET /meetings/:id/transcripts` returns chunk text without embeddings. `POST /ask-fred` streams AskFred UI messages. Tools call the same list query and semantic transcript search. Meeting reads and AskFred tools run through `forActor` so each Clerk `userId` only sees its own rows.
+- `POST /meetings/upload` stores the video and a queued meeting, then enqueues processing. `GET /meetings` accepts `page`, `limit`, `from`, `to` (exclusive), `status`, and `sourceId` via zValidator and returns `{ items, total, page, limit }` newest first. `GET /actions` lists task groups (`page`, `limit`, `status` pending|completed). `PATCH /meetings/:id/tasks/:taskId` sets a task status. `GET /meetings/:id/transcripts` returns chunk text without embeddings. `POST /ask-fred` streams AskFred UI messages. Tools call the same list query, action list, and semantic transcript search. Meeting reads and AskFred tools run through `forActor` so each Clerk `userId` only sees its own rows.
 - `src/lib/db/mongo` holds one reusable `MongoClient`. It does not export a generic database interface.
 
 ## Import rule
@@ -37,5 +37,6 @@ Add a vendor adapter only when something actually varies (MinIO vs in-memory).
 
 - **Meeting** — one uploaded video, its blob keys, and processing status.
 - **Transcript chunk** — a slice of transcript text with an embedding and model name.
-- **Summary** — structured takeaways and action items produced from the transcript.
+- **Summary** — structured takeaways produced from the transcript.
+- **Task** — an action item stored on the meeting with status pending or completed.
 - **Store** — the persistence interface for one feature. Each feature defines its own.

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { OwnerId } from "../../lib/auth/index.ts";
 import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
+import type { TaskStatus } from "./tasks.ts";
 import type { WithId } from "mongodb";
 
 export type MeetingListQuery = {
@@ -18,6 +19,8 @@ export type MeetingFilter = {
   status?: MeetingStatus;
   sourceId?: string;
   userId?: OwnerId;
+  taskStatus?: TaskStatus;
+  hasTasks?: boolean;
 };
 
 export type MeetingListPage = {
