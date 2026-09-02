@@ -1,13 +1,13 @@
 import OpenAI from "openai";
 import type { Transcribe } from "../index.ts";
 
-export function createOpenaiTranscribe(): Transcribe {
+export function createOpenaiTranscribe(model: string): Transcribe {
   const client = new OpenAI();
   return {
     run: async (file) => {
       const transcription = await client.audio.transcriptions.create({
         file,
-        model: "gpt-4o-transcribe",
+        model,
       });
       return { text: transcription.text };
     },

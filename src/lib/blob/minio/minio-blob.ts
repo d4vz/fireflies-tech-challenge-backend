@@ -4,6 +4,7 @@ import {
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
+import { parseSecrets } from "../../config/index.ts";
 import type { Blob } from "../index.ts";
 
 export type MinioBlobConfig = {
@@ -53,20 +54,13 @@ export function createMinioBlob(config: MinioBlobConfig): Blob {
 }
 
 export function minioBlobFromEnv(): Blob {
-  const endpoint = process.env.S3_ENDPOINT;
-  const accessKey = process.env.S3_ACCESS_KEY;
-  const secretKey = process.env.S3_SECRET_KEY;
-  const bucket = process.env.S3_BUCKET;
-  const region = process.env.S3_REGION ?? "us-east-1";
-  if (!endpoint || !accessKey || !secretKey || !bucket) {
-    throw new Error("S3_ENDPOINT, S3_ACCESS_KEY, S3_SECRET_KEY, and S3_BUCKET are required");
-  }
+  const secrets = parseSecrets(process.env);
   return createMinioBlob({
-    endpoint,
-    publicEndpoint: process.env.S3_PUBLIC_ENDPOINT ?? endpoint,
-    accessKey,
-    secretKey,
-    bucket,
-    region,
+    endpoint: secrets.S3_ENDPOINT,
+    publicEndpoint: secrets.S3_PUBLIC_ENDPOINT ?? secrets.S3_ENDPOINT,
+    accessKey: secrets.S3_ACCESS_KEY,
+    secretKey: secrets.S3_SECRET_KEY,
+    bucket: secrets.S3_BUCKET,
+    region: secrets.S3_REGION,
   });
 }
