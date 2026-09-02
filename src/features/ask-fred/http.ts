@@ -1,4 +1,5 @@
 import {
+  consumeStream,
   convertToModelMessages,
   createUIMessageStreamResponse,
   stepCountIs,
@@ -44,6 +45,7 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
     } catch {
       return c.json({ error: "invalid body" }, 400);
     }
+    const abortSignal = c.req.raw.signal;
     const result = streamText({
       model: deps.model,
       system: askFredSystemPrompt(new Date()),
@@ -51,9 +53,11 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
       tools: createAskFredTools(deps),
       stopWhen: stepCountIs(5),
       maxOutputTokens: 8192,
+      abortSignal,
     });
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({ stream: result.stream }),
+      consumeSseStream: ({ stream }) => consumeStream({ abortSignal, stream }),
     });
   });
 }
