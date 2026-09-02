@@ -19,6 +19,7 @@ export type ActionGroup = {
   sourceId: string;
   createdAt: string;
   href: string;
+  mediaKind: "video" | "audio";
   tasks: PublicMeetingTask[];
 };
 
@@ -64,6 +65,7 @@ export async function listActions(
         sourceId: meeting.sourceId,
         createdAt: meeting.createdAt.toISOString(),
         href: meetingHref(meetingId),
+        mediaKind: meeting.blob.kind === "audio" ? "audio" : "video",
         tasks: matchingTasks(meeting.tasks, query.status).map(toPublicMeetingTask),
       };
     }),

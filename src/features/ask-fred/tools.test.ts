@@ -362,6 +362,7 @@ test("listActions tool execute returns grouped JSON-safe tasks", async () => {
           sourceId: "screen-recording.webm",
           createdAt: "2026-09-01T03:33:00.000Z",
           href: "/meetings/6a963d4f786296c73b01d6d0",
+          mediaKind: "video",
           tasks: [
             {
               _id: "6a963d4f786296c73b01d6d1",
@@ -393,6 +394,7 @@ test("listActions tool execute returns grouped JSON-safe tasks", async () => {
         sourceId: "screen-recording.webm",
         createdAt: "2026-09-01T03:33:00.000Z",
         href: "/meetings/6a963d4f786296c73b01d6d0",
+        mediaKind: "video",
         tasks: [
           {
             _id: "6a963d4f786296c73b01d6d1",

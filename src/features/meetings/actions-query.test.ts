@@ -22,7 +22,9 @@ function sampleMeeting(input: {
   sourceId: string;
   createdAt: Date;
   tasks?: MeetingTask[];
+  kind?: "video" | "audio";
 }): WithId<Meeting> {
+  const kind = input.kind ?? "video";
   return {
     _id: new ObjectId(),
     userId: ownerId("user_a"),
@@ -31,13 +33,21 @@ function sampleMeeting(input: {
     createdAt: input.createdAt,
     status: "ready",
     tasks: input.tasks,
-    blob: {
-      kind: "video",
-      url: "/v",
-      durationInSeconds: 1,
-      sizeInBytes: 1,
-      thumbnailUrl: "/t",
-    },
+    blob:
+      kind === "audio"
+        ? {
+            kind: "audio",
+            url: "/v",
+            durationInSeconds: 1,
+            sizeInBytes: 1,
+          }
+        : {
+            kind: "video",
+            url: "/v",
+            durationInSeconds: 1,
+            sizeInBytes: 1,
+            thumbnailUrl: "/t",
+          },
   };
 }
 
@@ -141,7 +151,19 @@ test("listActions pages meeting groups and keeps only matching tasks", async () 
   );
   assert.equal(page.items[0]?.href, `/meetings/${newer._id.toHexString()}`);
   assert.equal(page.items[0]?.meetingId, newer._id.toHexString());
+  assert.equal(page.items[0]?.mediaKind, "video");
   assert.equal(page.items[1]?.sourceId, "older.mp4");
+});
+
+test("listActions stamps audio mediaKind from the blob", async () => {
+  const meeting = sampleMeeting({
+    sourceId: "notes.mp3",
+    createdAt: at,
+    tasks: [task("listen", "pending")],
+    kind: "audio",
+  });
+  const page = await listActions(fakeMeetingsStore([meeting]), { page: 1, limit: 10 });
+  assert.equal(page.items[0]?.mediaKind, "audio");
 });
 
 test("listActions skips by page of meeting groups", async () => {
