@@ -13,7 +13,7 @@ import type { Hono } from "hono";
 import { z } from "zod";
 import type { MeetingListPage, MeetingListQuery } from "../meetings/list-query.ts";
 import type { TranscriptHit, TranscriptSearchQuery } from "../meetings/search.ts";
-import { askFredSystemPrompt } from "./prompt.ts";
+import { askFredSystemPrompt, parseAskFredOrigin } from "./prompt.ts";
 import { createAskFredTools } from "./tools.ts";
 
 export const ASK_FRED_REASONING_EFFORT = "medium";
@@ -47,10 +47,14 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
     } catch {
       return c.json({ error: "invalid body" }, 400);
     }
+    const origin = parseAskFredOrigin(c.req.header("x-app-origin") ?? c.req.header("origin"));
+    if (origin === undefined) {
+      return c.json({ error: "invalid origin" }, 400);
+    }
     const abortSignal = c.req.raw.signal;
     const result = streamText({
       model: deps.model,
-      system: askFredSystemPrompt(new Date()),
+      system: askFredSystemPrompt(new Date(), origin),
       messages: await convertToModelMessages(request.messages),
       tools: createAskFredTools(deps),
       stopWhen: stepCountIs(5),
