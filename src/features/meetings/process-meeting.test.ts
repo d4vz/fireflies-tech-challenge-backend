@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ObjectId } from "mongodb";
 import { ownerId } from "../../lib/auth/index.ts";
@@ -75,7 +76,8 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
   const deps: ProcessMeetingDeps = {
     video: {
       extract: async (inputPath) => inputPath,
-      durationInSeconds: async () => unused(),
+      slice: async () => unused(),
+      durationInSeconds: async () => 1,
       thumbnail: async () => unused(),
     },
     blob: {
@@ -167,6 +169,74 @@ test("processMeeting stays ready with no chunks when segments are empty", async 
   assert.equal(summarized, "");
 });
 
+test("processMeeting transcribes each 2-minute window", async () => {
+  const { id, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  deps.video.durationInSeconds = async () => 240;
+  const slices: { start: number; duration: number }[] = [];
+  deps.video.slice = async (_audioPath, start, duration) => {
+    slices.push({ start, duration });
+    return `slice-${start}`;
+  };
+  const paths: string[] = [];
+  deps.transcribe = {
+    windowSeconds: 120,
+    run: async (audioPath) => {
+      paths.push(audioPath);
+      return {
+        text: "A: x",
+        segments: [{ speaker: "A", start: 1, end: 2, text: "x" }],
+      };
+    },
+    ping: async () => undefined,
+  };
+  await processMeeting(deps, id);
+  assert.deepEqual(slices, [
+    { start: 0, duration: 120 },
+    { start: 120, duration: 120 },
+  ]);
+  assert.deepEqual(paths, ["slice-0", "slice-120"]);
+  const chunks = await transcripts.listByMeeting(id);
+  assert.deepEqual(
+    chunks.map((chunk) => ({ start: chunk.start, end: chunk.end, text: chunk.text })),
+    [
+      { start: 1, end: 2, text: "x" },
+      { start: 121, end: 122, text: "x" },
+    ],
+  );
+});
+
+test("processMeeting transcribes a long file in one call when windows are off", async () => {
+  const { id, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  deps.video.durationInSeconds = async () => 240;
+  const slices: number[] = [];
+  deps.video.slice = async (_audioPath, start) => {
+    slices.push(start);
+    return `slice-${start}`;
+  };
+  const paths: string[] = [];
+  deps.transcribe = {
+    run: async (audioPath) => {
+      paths.push(audioPath);
+      return {
+        text: "A: x",
+        segments: [{ speaker: "A", start: 1, end: 2, text: "x" }],
+      };
+    },
+    ping: async () => undefined,
+  };
+  await processMeeting(deps, id);
+  assert.deepEqual(slices, []);
+  assert.equal(paths.length, 1);
+  const chunks = await transcripts.listByMeeting(id);
+  assert.equal(chunks[0]?.start, 1);
+});
+
 test("processMeetingJob sets failed with the error message", async () => {
   const { id, meetings, deps } = await queuedJob(async () => ({
     body: bytesStream(new Uint8Array([1, 2, 3])),
@@ -228,4 +298,19 @@ test("processMeetingJob sets failed when the blob is missing", async () => {
   const failed = await meetings.get(actor, id);
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.error, "video is missing");
+});
+
+test("processMeeting logs each pipeline step", () => {
+  const source = readFileSync(new URL("./process-meeting.ts", import.meta.url), "utf8");
+  for (const step of [
+    "download blob",
+    "extract audio",
+    "transcribe",
+    "embed",
+    "save transcripts",
+    "summarize",
+    "mark ready",
+  ]) {
+    assert.match(source, new RegExp(step.replaceAll(" ", "\\s+")));
+  }
 });

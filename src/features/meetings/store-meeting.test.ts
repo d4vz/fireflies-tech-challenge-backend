@@ -30,6 +30,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
     {
       video: {
         extract: async () => unused(),
+        slice: async () => unused(),
         durationInSeconds: async () => 8,
         thumbnail: async () => {
           thumbnailCalls += 1;

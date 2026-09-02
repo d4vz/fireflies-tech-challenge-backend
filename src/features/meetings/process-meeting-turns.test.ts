@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chunkText, rowsFromTranscript } from "./process-meeting.ts";
+import {
+  chunkText,
+  joinTranscripts,
+  rowsFromTranscript,
+  shiftTranscript,
+  transcribeWindows,
+} from "./process-meeting.ts";
 
 test("rowsFromTranscript stores one row per short speaker turn", () => {
   const rows = rowsFromTranscript(
@@ -60,4 +66,52 @@ test("rowsFromTranscript skips empty segments", () => {
 test("chunkText slices by characters when there is no whitespace", () => {
   assert.deepEqual(chunkText("abcdefghij", 5), ["abcde", "fghij"]);
   assert.deepEqual(chunkText("", 5), []);
+});
+
+test("transcribeWindows keeps a short file as one window", () => {
+  assert.deepEqual(transcribeWindows(90, 120), [{ start: 0, duration: 90 }]);
+  assert.deepEqual(transcribeWindows(120, 120), [{ start: 0, duration: 120 }]);
+  assert.deepEqual(transcribeWindows(240), [{ start: 0, duration: 240 }]);
+});
+
+test("transcribeWindows splits a long file into 2-minute windows", () => {
+  assert.deepEqual(transcribeWindows(240, 120), [
+    { start: 0, duration: 120 },
+    { start: 120, duration: 120 },
+  ]);
+  assert.deepEqual(transcribeWindows(241, 120), [
+    { start: 0, duration: 120 },
+    { start: 120, duration: 120 },
+    { start: 240, duration: 1 },
+  ]);
+});
+
+test("shiftTranscript adds the window start to every turn", () => {
+  const shifted = shiftTranscript(
+    {
+      text: "A: hi",
+      segments: [{ speaker: "A", start: 1, end: 3, text: "hi" }],
+    },
+    120,
+  );
+  assert.deepEqual(shifted.segments, [{ speaker: "A", start: 121, end: 123, text: "hi" }]);
+  assert.equal(shifted.text, "A: hi");
+});
+
+test("joinTranscripts concatenates turns in time order", () => {
+  const joined = joinTranscripts([
+    {
+      text: "A: first",
+      segments: [{ speaker: "A", start: 0, end: 2, text: "first" }],
+    },
+    {
+      text: "B: second",
+      segments: [{ speaker: "B", start: 120, end: 122, text: "second" }],
+    },
+  ]);
+  assert.equal(joined.text, "A: first\nB: second");
+  assert.deepEqual(joined.segments, [
+    { speaker: "A", start: 0, end: 2, text: "first" },
+    { speaker: "B", start: 120, end: 122, text: "second" },
+  ]);
 });

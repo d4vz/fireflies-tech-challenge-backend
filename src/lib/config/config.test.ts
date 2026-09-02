@@ -36,7 +36,7 @@ test("parseSettings reads models, chunk size, and upload limits from yaml", () =
 test("AskFred chat model is gpt-5.1", async () => {
   const settings = await loadSettings(settingsFileUrl);
   assert.equal(settings.models.chat, "gpt-5.1");
-  assert.equal(settings.models.transcribe, "gpt-4o-transcribe-diarize");
+  assert.equal(settings.models.transcribe, "assemblyai");
 });
 
 test("parseSettings rejects yaml that is missing models", () => {
@@ -68,6 +68,23 @@ test("parseSecrets reads FRONTEND_ORIGIN when set", () => {
     FRONTEND_ORIGIN: "https://frontend-production-8339.up.railway.app",
   });
   assert.equal(secrets.FRONTEND_ORIGIN, "https://frontend-production-8339.up.railway.app");
+});
+
+test("parseSecrets keeps ASSEMBLYAI_API_KEY optional and reads it when set", () => {
+  const withoutKey = parseSecrets(requiredSecrets);
+  assert.equal(withoutKey.ASSEMBLYAI_API_KEY, undefined);
+
+  const blankKey = parseSecrets({
+    ...requiredSecrets,
+    ASSEMBLYAI_API_KEY: "",
+  });
+  assert.equal(blankKey.ASSEMBLYAI_API_KEY, undefined);
+
+  const withKey = parseSecrets({
+    ...requiredSecrets,
+    ASSEMBLYAI_API_KEY: "aai-test",
+  });
+  assert.equal(withKey.ASSEMBLYAI_API_KEY, "aai-test");
 });
 
 test("parseSecrets requires CLERK_SECRET_KEY", () => {

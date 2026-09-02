@@ -52,6 +52,7 @@ function testDeps(): CreateAppDeps {
   return {
     video: {
       extract: async () => unused(),
+      slice: async () => unused(),
       durationInSeconds: async () => unused(),
       thumbnail: async () => unused(),
     },

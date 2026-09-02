@@ -128,6 +128,28 @@ export function createFfmpegVideo(): Video {
       );
       return outputPath;
     },
+    slice: async (inputPath, startSeconds, durationSeconds) => {
+      const outputPath = beside(inputPath, `audio-${startSeconds}.mp3`);
+      await run(
+        "ffmpeg",
+        [
+          "-y",
+          "-i",
+          inputPath,
+          "-ss",
+          String(startSeconds),
+          "-t",
+          String(durationSeconds),
+          "-acodec",
+          "libmp3lame",
+          "-q:a",
+          "4",
+          outputPath,
+        ],
+        "Could not slice audio",
+      );
+      return outputPath;
+    },
     durationInSeconds: async (inputPath) => {
       const seconds =
         (await formatDuration(inputPath)) ??

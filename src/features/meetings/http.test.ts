@@ -74,6 +74,7 @@ function testDeps(meetings: Meetings, blobGet?: CreateAppDeps["blob"]["get"]): C
   return {
     video: {
       extract: async () => unused(),
+      slice: async () => unused(),
       durationInSeconds: async () => unused(),
       thumbnail: async () => unused(),
     },
