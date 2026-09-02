@@ -11,6 +11,7 @@ import type { Video } from "./lib/video/index.ts";
 import { createAskFredTools } from "./features/ask-fred/tools.ts";
 import { mountAskFred } from "./features/ask-fred/http.ts";
 import { mountHealth } from "./features/health/http.ts";
+import { listActions } from "./features/meetings/actions-query.ts";
 import { listMeetings } from "./features/meetings/list-query.ts";
 import { searchMeetingTranscripts, searchTranscripts } from "./features/meetings/search.ts";
 import { mountMeetings } from "./features/meetings/http.ts";
@@ -47,6 +48,7 @@ export function createApp(deps: CreateAppDeps) {
       return createAskFredTools({
         model: deps.model,
         listMeetings: (query) => listMeetings(owned, query),
+        listActions: (query) => listActions(owned, query),
         searchTranscripts: (query) =>
           searchTranscripts(
             { meetings: owned, transcripts: deps.transcripts, embed: deps.embed },

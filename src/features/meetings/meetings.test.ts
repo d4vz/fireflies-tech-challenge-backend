@@ -49,6 +49,7 @@ function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
     count: async (filter) => rows.filter((item) => item.userId === filter.userId).length,
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
 }

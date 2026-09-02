@@ -23,6 +23,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
     count: async () => unused(),
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   const file: ClassifiedFile = {

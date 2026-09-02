@@ -57,6 +57,7 @@ function testDeps(): CreateAppDeps {
     count: async () => 0,
     setStatus: async () => unused(),
     setReady: async () => unused(),
+    setTaskStatus: async () => unused(),
     setFailed: async () => unused(),
   };
   return {
