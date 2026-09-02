@@ -184,6 +184,44 @@ test("processMeetingJob sets failed with the error message", async () => {
   assert.equal(failed?.error, "whisper down");
 });
 
+test("processMeetingJob does not fail a meeting on a timeout when retries remain", async () => {
+  const { id, meetings, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  const timeout = new Error("Request timed out.");
+  timeout.name = "APIConnectionTimeoutError";
+  deps.transcribe = {
+    run: async () => {
+      throw timeout;
+    },
+    ping: async () => undefined,
+  };
+  await assert.rejects(() => processMeetingJob(deps, id, { lastAttempt: false }), /timed out/);
+  const row = await meetings.get(actor, id);
+  assert.equal(row?.status, "processing");
+  assert.equal(row?.error, undefined);
+});
+
+test("processMeetingJob fails a meeting on the last timeout", async () => {
+  const { id, meetings, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  const timeout = new Error("Request timed out.");
+  timeout.name = "APIConnectionTimeoutError";
+  deps.transcribe = {
+    run: async () => {
+      throw timeout;
+    },
+    ping: async () => undefined,
+  };
+  await assert.rejects(() => processMeetingJob(deps, id, { lastAttempt: true }), /timed out/);
+  const failed = await meetings.get(actor, id);
+  assert.equal(failed?.status, "failed");
+  assert.equal(failed?.error, "Request timed out.");
+});
+
 test("processMeetingJob sets failed when the blob is missing", async () => {
   const { id, meetings, deps } = await queuedJob(async () => undefined);
   await assert.rejects(() => processMeetingJob(deps, id), /video is missing/);

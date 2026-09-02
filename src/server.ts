@@ -40,7 +40,9 @@ const processDeps = {
   settings,
 };
 
-startMeetingsWorker(secrets.REDIS_URL, (meetingId) => processMeetingJob(processDeps, meetingId));
+startMeetingsWorker(secrets.REDIS_URL, (meetingId, options) =>
+  processMeetingJob(processDeps, meetingId, options),
+);
 
 await transcripts.ensureVectorIndex();
 

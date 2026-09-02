@@ -1,6 +1,7 @@
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Embed } from "../../lib/embed/index.ts";
+import { isRetryableJobError } from "../../lib/queue/index.ts";
 import type { Summarize } from "../../lib/summarize/index.ts";
 import { labeledTurnText, type Transcript, type Transcribe } from "../../lib/transcribe/index.ts";
 import type { Video } from "../../lib/video/index.ts";
@@ -103,10 +104,17 @@ export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string
   }
 }
 
-export async function processMeetingJob(deps: ProcessMeetingDeps, meetingId: string) {
+export async function processMeetingJob(
+  deps: ProcessMeetingDeps,
+  meetingId: string,
+  options: { lastAttempt: boolean } = { lastAttempt: true },
+) {
   try {
     await processMeeting(deps, meetingId);
   } catch (error) {
+    if (error instanceof Error && isRetryableJobError(error) && !options.lastAttempt) {
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "processing failed";
     await deps.meetings.setFailed(meetingId, message);
     throw error;
