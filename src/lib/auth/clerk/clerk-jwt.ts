@@ -2,7 +2,7 @@ import { verifyToken } from "@clerk/backend";
 import { z } from "zod";
 import { AuthError, ownerId, type AuthVerify } from "../index.ts";
 
-const clerkSessionSchema = z.object({
+export const clerkSessionSchema = z.object({
   sub: z.string().min(1),
 });
 
@@ -36,11 +36,9 @@ export function createClerkAuthVerify(secretKey: string, frontendOrigin?: string
       if (token === undefined) {
         throw new AuthError();
       }
-      const result = await verifiedPayload(token, secretKey, frontendOrigin);
-      if (result.errors !== undefined) {
-        throw new AuthError();
-      }
-      const parsed = clerkSessionSchema.safeParse(result.data);
+      const parsed = clerkSessionSchema.safeParse(
+        await verifiedPayload(token, secretKey, frontendOrigin),
+      );
       if (!parsed.success) {
         throw new AuthError();
       }
