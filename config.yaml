@@ -3,6 +3,7 @@ models:
   transcribe: gpt-4o-transcribe
   summary: gpt-4o-mini
   embed: text-embedding-3-small
+  chat: gpt-4o-mini
 upload:
   maxFileBytes: 5368709120
   mimeTypes:

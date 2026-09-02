@@ -1,4 +1,5 @@
 import { serve } from "@hono/node-server";
+import { openai } from "@ai-sdk/openai";
 import { minioBlobFromEnv } from "./lib/blob/minio/minio-blob.ts";
 import { loadSettings, parseSecrets, settingsFileUrl } from "./lib/config/index.ts";
 import { mongoFromEnv } from "./lib/db/mongo/mongo-db.ts";
@@ -21,6 +22,7 @@ const video = createFfmpegVideo();
 const transcribe = createOpenaiTranscribe(settings.models.transcribe);
 const summarize = createOpenaiSummarize(settings.models.summary);
 const embed = createOpenaiEmbed(settings.models.embed);
+const model = openai.chat(settings.models.chat);
 const meetings = createMeetingsStore(mongo);
 const transcripts = createTranscriptsStore(mongo);
 const queue = createBullmqQueue(secrets.REDIS_URL);
@@ -38,6 +40,8 @@ const processDeps = {
 
 startMeetingsWorker(secrets.REDIS_URL, (meetingId) => processMeetingJob(processDeps, meetingId));
 
+await transcripts.ensureVectorIndex();
+
 const app = createApp({
   video,
   blob,
@@ -46,6 +50,8 @@ const app = createApp({
   transcripts,
   queue,
   settings,
+  embed,
+  model,
 });
 
 serve({

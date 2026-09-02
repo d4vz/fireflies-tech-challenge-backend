@@ -7,6 +7,7 @@ const settingsSchema = z.object({
     transcribe: z.string().min(1),
     summary: z.string().min(1),
     embed: z.string().min(1),
+    chat: z.string().min(1),
   }),
   upload: z.object({
     maxFileBytes: z.number().int().positive(),

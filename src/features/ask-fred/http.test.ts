@@ -1,0 +1,68 @@
+import assert from "node:assert/strict";
+import { test } from "node:test";
+import { ObjectId } from "mongodb";
+import { createApp, type CreateAppDeps } from "../../create-app.ts";
+import { parseSettings } from "../../lib/config/index.ts";
+import type { MeetingsStore } from "../meetings/store.ts";
+
+const settings = parseSettings(`
+chunkSize: 500
+models:
+  transcribe: gpt-4o-transcribe
+  summary: gpt-4o-mini
+  embed: text-embedding-3-small
+  chat: gpt-4o-mini
+upload:
+  maxFileBytes: 100
+  mimeTypes:
+    - video/mp4
+  extensions:
+    - mp4
+`);
+
+function unused(): never {
+  throw new Error("unused");
+}
+
+function testDeps(): CreateAppDeps {
+  const meetings: MeetingsStore = {
+    createId: () => new ObjectId(),
+    insert: async () => unused(),
+    get: async () => null,
+    list: async () => [],
+    count: async () => 0,
+    setStatus: async () => unused(),
+    setReady: async () => unused(),
+    setFailed: async () => unused(),
+  };
+  return {
+    video: {
+      extract: async () => unused(),
+      durationInSeconds: async () => unused(),
+      thumbnail: async () => unused(),
+    },
+    blob: { put: async () => unused(), get: async () => undefined, ping: async () => undefined },
+    transcribe: { run: async () => unused(), ping: async () => undefined },
+    meetings,
+    transcripts: {
+      insertAll: async () => unused(),
+      listByMeeting: async () => [],
+      searchByEmbedding: async () => [],
+      ensureVectorIndex: async () => undefined,
+    },
+    queue: { enqueue: async () => undefined },
+    settings,
+    embed: { model: "test-embed", run: async () => [] },
+    model: "openai/gpt-4o-mini",
+  };
+}
+
+test("POST /ask-fred returns 400 for an invalid body", async () => {
+  const app = createApp(testDeps());
+  const res = await app.request("/ask-fred", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ messages: "nope" }),
+  });
+  assert.equal(res.status, 400);
+});

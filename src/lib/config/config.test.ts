@@ -8,6 +8,7 @@ models:
   transcribe: gpt-4o-transcribe
   summary: gpt-4o-mini
   embed: text-embedding-3-small
+  chat: gpt-4o-mini
 upload:
   maxFileBytes: 5368709120
   mimeTypes:
@@ -20,6 +21,7 @@ test("parseSettings reads models, chunk size, and upload limits from yaml", () =
   const settings = parseSettings(yaml);
   assert.equal(settings.chunkSize, 500);
   assert.equal(settings.models.summary, "gpt-4o-mini");
+  assert.equal(settings.models.chat, "gpt-4o-mini");
   assert.equal(settings.upload.maxFileBytes, 5368709120);
 });
 

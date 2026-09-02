@@ -1,5 +1,6 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
+import { zValidator } from "@hono/zod-validator";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
@@ -8,6 +9,7 @@ import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
 import { storeMeeting } from "./store-meeting.ts";
 import { meetingThumbnailKey, meetingVideoKey, type MeetingsStore } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
+import { listMeetings, meetingListQuerySchema } from "./list-query.ts";
 
 export type MeetingsHttpDeps = {
   video: Video;
@@ -31,28 +33,9 @@ async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
   });
 }
 
-const DEFAULT_PAGE = 1;
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 50;
-
-function positiveInt(value: string | undefined, fallback: number, max: number) {
-  const parsed = Number.parseInt(value ?? "", 10);
-  if (!Number.isFinite(parsed) || parsed < 1) {
-    return fallback;
-  }
-  return Math.min(parsed, max);
-}
-
 export function mountMeetings(app: Hono, deps: MeetingsHttpDeps) {
-  app.get("/meetings", async (c) => {
-    const page = positiveInt(c.req.query("page"), DEFAULT_PAGE, Number.MAX_SAFE_INTEGER);
-    const limit = positiveInt(c.req.query("limit"), DEFAULT_LIMIT, MAX_LIMIT);
-    const skip = (page - 1) * limit;
-    const [items, total] = await Promise.all([
-      deps.meetings.list(skip, limit),
-      deps.meetings.count(),
-    ]);
-    return c.json({ items, total, page, limit });
+  app.get("/meetings", zValidator("query", meetingListQuerySchema), async (c) => {
+    return c.json(await listMeetings(deps.meetings, c.req.valid("query")));
   });
 
   app.get("/meetings/:id/thumbnail", async (c) => {
