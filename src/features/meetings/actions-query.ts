@@ -35,10 +35,6 @@ export const actionListQuerySchema: z.ZodType<ActionListQuery> = z.object({
   status: z.enum(["pending", "completed"]).optional(),
 });
 
-export const taskStatusSchema = z.object({
-  status: z.enum(["pending", "completed"]),
-});
-
 export function actionFilter(query: ActionListQuery): MeetingFilter {
   if (query.status !== undefined) {
     return { taskStatus: query.status };

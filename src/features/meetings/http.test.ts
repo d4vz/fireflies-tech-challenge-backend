@@ -5,7 +5,7 @@ import { AuthError, ownerId, type AuthVerify, type OwnerId } from "../../lib/aut
 import { createApp, type CreateAppDeps } from "../../create-app.ts";
 import { parseSettings } from "../../lib/config/index.ts";
 import type { MeetingFilter } from "./list-query.ts";
-import type { Meeting, MeetingsStore, SetTaskStatusResult } from "./store.ts";
+import type { Meeting, MeetingsStore } from "./store.ts";
 
 const settings = parseSettings(`
 chunkSize: 500
@@ -76,22 +76,21 @@ function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
 } {
   const listCalls: { skip: number; limit: number; filter: MeetingFilter }[] = [];
   const statusWrites: { id: string; taskId: string; status: string }[] = [];
-  const rows = items;
   return {
     listCalls,
     statusWrites,
     createId: () => new ObjectId(),
     insert: async () => unused(),
-    get: async (id) => rows.find((item) => item._id.toHexString() === id) ?? null,
+    get: async (id) => items.find((item) => item._id.toHexString() === id) ?? null,
     list: async (skip, limit, filter) => {
       listCalls.push({ skip, limit, filter });
-      return rows.slice(skip, skip + limit);
+      return items.slice(skip, skip + limit);
     },
-    count: async () => rows.length,
+    count: async () => items.length,
     setStatus: async () => unused(),
     setReady: async () => unused(),
-    setTaskStatus: async (id, taskId, status, at): Promise<SetTaskStatusResult> => {
-      const meeting = rows.find((item) => item._id.toHexString() === id);
+    setTaskStatus: async (id, taskId, status, at) => {
+      const meeting = items.find((item) => item._id.toHexString() === id);
       const task = (meeting?.tasks ?? []).find((item) => item._id.toHexString() === taskId);
       if (task === undefined) {
         return { kind: "missing" };

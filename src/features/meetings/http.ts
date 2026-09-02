@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { zValidator } from "@hono/zod-validator";
+import { z } from "zod";
 import type { Actor } from "../../lib/auth/index.ts";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
@@ -16,9 +17,13 @@ import {
   type OwnedMeetings,
 } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
-import { listActions, actionListQuerySchema, taskStatusSchema } from "./actions-query.ts";
+import { listActions, actionListQuerySchema } from "./actions-query.ts";
 import { listMeetings, meetingListQuerySchema } from "./list-query.ts";
 import { toPublicMeetingTask } from "./tasks.ts";
+
+const taskStatusSchema = z.object({
+  status: z.enum(["pending", "completed"]),
+});
 
 export type MeetingsHttpDeps = {
   video: Video;
