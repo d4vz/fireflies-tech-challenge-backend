@@ -4,8 +4,8 @@ import { ObjectId, type WithId } from "mongodb";
 import { AuthError, ownerId, type AuthVerify, type OwnerId } from "../../lib/auth/index.ts";
 import { createApp, type CreateAppDeps } from "../../create-app.ts";
 import { parseSettings } from "../../lib/config/index.ts";
-import type { MeetingFilter } from "./list-query.ts";
-import type { Meeting, MeetingsStore } from "./store.ts";
+import { createMemoryMeetings } from "./memory-meetings.ts";
+import type { Meeting, Meetings } from "./store.ts";
 
 const settings = parseSettings(`
 chunkSize: 500
@@ -70,44 +70,7 @@ function testAuth(): AuthVerify {
   };
 }
 
-function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
-  listCalls: { skip: number; limit: number; filter: MeetingFilter }[];
-  statusWrites: { id: string; taskId: string; status: string }[];
-} {
-  const listCalls: { skip: number; limit: number; filter: MeetingFilter }[] = [];
-  const statusWrites: { id: string; taskId: string; status: string }[] = [];
-  return {
-    listCalls,
-    statusWrites,
-    createId: () => new ObjectId(),
-    insert: async () => unused(),
-    get: async (id) => items.find((item) => item._id.toHexString() === id) ?? null,
-    list: async (skip, limit, filter) => {
-      listCalls.push({ skip, limit, filter });
-      return items.slice(skip, skip + limit);
-    },
-    count: async () => items.length,
-    setStatus: async () => unused(),
-    setReady: async () => unused(),
-    setTaskStatus: async (id, taskId, status, at) => {
-      const meeting = items.find((item) => item._id.toHexString() === id);
-      const task = (meeting?.tasks ?? []).find((item) => item._id.toHexString() === taskId);
-      if (task === undefined) {
-        return { kind: "missing" };
-      }
-      if (task.status === status) {
-        return { kind: "unchanged", task };
-      }
-      statusWrites.push({ id, taskId, status });
-      task.status = status;
-      task.updatedAt = at;
-      return { kind: "updated", task };
-    },
-    setFailed: async () => unused(),
-  };
-}
-
-function testDeps(meetings: MeetingsStore, blobGet?: CreateAppDeps["blob"]["get"]): CreateAppDeps {
+function testDeps(meetings: Meetings, blobGet?: CreateAppDeps["blob"]["get"]): CreateAppDeps {
   return {
     video: {
       extract: async () => unused(),
@@ -135,21 +98,26 @@ function testDeps(meetings: MeetingsStore, blobGet?: CreateAppDeps["blob"]["get"
   };
 }
 
+function appFor(items: WithId<Meeting>[] = [], blobGet?: CreateAppDeps["blob"]["get"]) {
+  const { meetings } = createMemoryMeetings(items);
+  return { app: createApp(testDeps(meetings, blobGet)), meetings };
+}
+
 test("GET /health is public", async () => {
-  const app = createApp(testDeps(fakeMeetingsStore([])));
+  const { app } = appFor();
   const res = await app.request("/health");
   assert.equal(res.status, 200);
 });
 
 test("GET /meetings without Authorization returns 401", async () => {
-  const app = createApp(testDeps(fakeMeetingsStore([])));
+  const { app } = appFor();
   const res = await app.request("/meetings");
   assert.equal(res.status, 401);
 });
 
 test("GET /meetings as another user returns 404 for that meeting", async () => {
   const meeting = sampleMeeting("keep.mp4", ownerId("user_a"));
-  const app = createApp(testDeps(fakeMeetingsStore([meeting])));
+  const { app } = appFor([meeting]);
   const res = await app.request(`/meetings/${meeting._id.toHexString()}`, {
     headers: bearerAuth("user_b"),
   });
@@ -157,39 +125,37 @@ test("GET /meetings as another user returns 404 for that meeting", async () => {
 });
 
 test("GET /meetings validates query and lists through listMeetings", async () => {
-  const items = [sampleMeeting("a.mp4"), sampleMeeting("b.mp4")];
-  const meetings = fakeMeetingsStore(items);
-  const app = createApp(testDeps(meetings));
+  const mineReady = sampleMeeting("a.mp4");
+  const mineQueued = sampleMeeting("queued.mp4");
+  mineQueued.status = "queued";
+  const theirs = sampleMeeting("b.mp4", ownerId("user_b"));
+  theirs.status = "ready";
+  const { app } = appFor([mineReady, mineQueued, theirs]);
   const res = await app.request("/meetings?page=1&limit=10&status=ready", {
-    headers: bearerAuth(items[0]!.userId),
+    headers: bearerAuth(mineReady.userId),
   });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.page, 1);
   assert.equal(body.limit, 10);
-  assert.equal(body.total, 2);
-  assert.equal(body.items.length, 2);
-  assert.deepEqual(meetings.listCalls[0]?.filter, { status: "ready", userId: items[0]!.userId });
+  assert.equal(body.total, 1);
+  assert.equal(body.items.length, 1);
+  assert.equal(body.items[0]?.sourceId, "a.mp4");
 });
 
 test("GET /meetings defaults page and limit", async () => {
-  const meetings = fakeMeetingsStore([]);
-  const app = createApp(testDeps(meetings));
+  const { app } = appFor();
   const res = await app.request("/meetings", { headers: bearerAuth("user_a") });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.page, 1);
   assert.equal(body.limit, 10);
-  assert.deepEqual(meetings.listCalls[0], {
-    skip: 0,
-    limit: 10,
-    filter: { userId: ownerId("user_a") },
-  });
+  assert.equal(body.items.length, 0);
 });
 
 test("GET /meetings returns 400 for an invalid query", async () => {
   const headers = bearerAuth("user_a");
-  const app = createApp(testDeps(fakeMeetingsStore([])));
+  const { app } = appFor();
   const page = await app.request("/meetings?page=0", { headers });
   assert.equal(page.status, 400);
   const limit = await app.request("/meetings?limit=51", { headers });
@@ -205,7 +171,7 @@ test("GET /meetings returns 400 for an invalid query", async () => {
 
 test("GET /meetings/:id still returns a meeting", async () => {
   const meeting = sampleMeeting("keep.mp4");
-  const app = createApp(testDeps(fakeMeetingsStore([meeting])));
+  const { app } = appFor([meeting]);
   const res = await app.request(`/meetings/${meeting._id.toHexString()}`, {
     headers: bearerAuth(meeting.userId),
   });
@@ -218,15 +184,13 @@ test("GET /meetings/:id still returns a meeting", async () => {
 test("GET /meetings/:id/video as another user returns 404 without reading the blob", async () => {
   const meeting = sampleMeeting("keep.mp4", ownerId("user_a"));
   let blobGets = 0;
-  const app = createApp(
-    testDeps(fakeMeetingsStore([meeting]), async () => {
-      blobGets += 1;
-      return {
-        body: new ReadableStream(),
-        contentType: "video/mp4",
-      };
-    }),
-  );
+  const { app } = appFor([meeting], async () => {
+    blobGets += 1;
+    return {
+      body: new ReadableStream(),
+      contentType: "video/mp4",
+    };
+  });
   const res = await app.request(`/meetings/${meeting._id.toHexString()}/video`, {
     headers: bearerAuth("user_b"),
   });
@@ -237,15 +201,13 @@ test("GET /meetings/:id/video as another user returns 404 without reading the bl
 test("GET /meetings/:id/thumbnail as another user returns 404 without reading the blob", async () => {
   const meeting = sampleMeeting("keep.mp4", ownerId("user_a"));
   let blobGets = 0;
-  const app = createApp(
-    testDeps(fakeMeetingsStore([meeting]), async () => {
-      blobGets += 1;
-      return {
-        body: new ReadableStream(),
-        contentType: "image/jpeg",
-      };
-    }),
-  );
+  const { app } = appFor([meeting], async () => {
+    blobGets += 1;
+    return {
+      body: new ReadableStream(),
+      contentType: "image/jpeg",
+    };
+  });
   const res = await app.request(`/meetings/${meeting._id.toHexString()}/thumbnail`, {
     headers: bearerAuth("user_b"),
   });
@@ -255,7 +217,7 @@ test("GET /meetings/:id/thumbnail as another user returns 404 without reading th
 
 test("GET /meetings/:id/transcripts as another user returns 404", async () => {
   const meeting = sampleMeeting("keep.mp4", ownerId("user_a"));
-  const app = createApp(testDeps(fakeMeetingsStore([meeting])));
+  const { app } = appFor([meeting]);
   const res = await app.request(`/meetings/${meeting._id.toHexString()}/transcripts`, {
     headers: bearerAuth("user_b"),
   });
@@ -263,29 +225,56 @@ test("GET /meetings/:id/transcripts as another user returns 404", async () => {
 });
 
 test("GET /actions lists through listActions with hasTasks", async () => {
-  const meetings = fakeMeetingsStore([]);
-  const app = createApp(testDeps(meetings));
+  const withTasks = sampleMeeting("tasks.mp4");
+  withTasks.tasks = [
+    {
+      _id: new ObjectId(),
+      text: "open",
+      status: "pending",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const empty = sampleMeeting("empty.mp4");
+  empty.tasks = [];
+  const { app } = appFor([withTasks, empty]);
   const res = await app.request("/actions?page=1&limit=10", { headers: bearerAuth("user_a") });
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.page, 1);
   assert.equal(body.limit, 10);
-  assert.deepEqual(meetings.listCalls[0]?.filter, { hasTasks: true, userId: ownerId("user_a") });
+  assert.equal(body.total, 1);
+  assert.equal(body.items[0]?.sourceId, "tasks.mp4");
 });
 
 test("GET /actions?status=pending filters taskStatus", async () => {
-  const meetings = fakeMeetingsStore([]);
-  const app = createApp(testDeps(meetings));
+  const pending = sampleMeeting("pending.mp4");
+  pending.tasks = [
+    {
+      _id: new ObjectId(),
+      text: "open",
+      status: "pending",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const done = sampleMeeting("done.mp4");
+  done.tasks = [
+    {
+      _id: new ObjectId(),
+      text: "done",
+      status: "completed",
+      updatedAt: new Date("2026-09-01T12:00:00.000Z"),
+    },
+  ];
+  const { app } = appFor([pending, done]);
   const res = await app.request("/actions?status=pending", { headers: bearerAuth("user_a") });
   assert.equal(res.status, 200);
-  assert.deepEqual(meetings.listCalls[0]?.filter, {
-    taskStatus: "pending",
-    userId: ownerId("user_a"),
-  });
+  const body = await res.json();
+  assert.equal(body.total, 1);
+  assert.equal(body.items[0]?.sourceId, "pending.mp4");
 });
 
 test("GET /actions returns 400 for an unknown status", async () => {
-  const app = createApp(testDeps(fakeMeetingsStore([])));
+  const { app } = appFor();
   const res = await app.request("/actions?status=ready", { headers: bearerAuth("user_a") });
   assert.equal(res.status, 400);
 });
@@ -301,8 +290,7 @@ test("PATCH /meetings/:id/tasks/:taskId marks a task completed", async () => {
       updatedAt: new Date("2026-09-01T12:00:00.000Z"),
     },
   ];
-  const meetings = fakeMeetingsStore([meeting]);
-  const app = createApp(testDeps(meetings));
+  const { app, meetings } = appFor([meeting]);
   const res = await app.request(
     `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
     {
@@ -315,7 +303,8 @@ test("PATCH /meetings/:id/tasks/:taskId marks a task completed", async () => {
   const body = await res.json();
   assert.equal(body.status, "completed");
   assert.equal(body._id, taskId.toHexString());
-  assert.equal(meetings.statusWrites.length, 1);
+  const stored = await meetings.get({ id: meeting.userId }, meeting._id.toHexString());
+  assert.equal(stored?.tasks?.[0]?.status, "completed");
 });
 
 test("PATCH /meetings/:id/tasks/:taskId is a no-op when status matches", async () => {
@@ -329,8 +318,7 @@ test("PATCH /meetings/:id/tasks/:taskId is a no-op when status matches", async (
       updatedAt: new Date("2026-09-01T12:00:00.000Z"),
     },
   ];
-  const meetings = fakeMeetingsStore([meeting]);
-  const app = createApp(testDeps(meetings));
+  const { app, meetings } = appFor([meeting]);
   const res = await app.request(
     `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
     {
@@ -340,7 +328,8 @@ test("PATCH /meetings/:id/tasks/:taskId is a no-op when status matches", async (
     },
   );
   assert.equal(res.status, 200);
-  assert.equal(meetings.statusWrites.length, 0);
+  const stored = await meetings.get({ id: meeting.userId }, meeting._id.toHexString());
+  assert.equal(stored?.tasks?.[0]?.updatedAt.toISOString(), "2026-09-01T12:00:00.000Z");
   const body = await res.json();
   assert.equal(body.status, "completed");
   assert.equal(body.updatedAt, "2026-09-01T12:00:00.000Z");
@@ -357,8 +346,7 @@ test("PATCH /meetings/:id/tasks/:taskId as another user returns 404", async () =
       updatedAt: new Date("2026-09-01T12:00:00.000Z"),
     },
   ];
-  const meetings = fakeMeetingsStore([meeting]);
-  const app = createApp(testDeps(meetings));
+  const { app, meetings } = appFor([meeting]);
   const res = await app.request(
     `/meetings/${meeting._id.toHexString()}/tasks/${taskId.toHexString()}`,
     {
@@ -368,5 +356,6 @@ test("PATCH /meetings/:id/tasks/:taskId as another user returns 404", async () =
     },
   );
   assert.equal(res.status, 404);
-  assert.equal(meetings.statusWrites.length, 0);
+  const stored = await meetings.get({ id: meeting.userId }, meeting._id.toHexString());
+  assert.equal(stored?.tasks?.[0]?.status, "pending");
 });

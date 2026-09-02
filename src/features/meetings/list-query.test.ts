@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ObjectId, type WithId } from "mongodb";
 import { z } from "zod";
+import { ownerId } from "../../lib/auth/index.ts";
 import {
   listMeetings,
   meetingFilter,
   meetingListQuerySchema,
   skipOf,
-  type MeetingFilter,
   type MeetingListQuery,
 } from "./list-query.ts";
-import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
-import { ownerId } from "../../lib/auth/index.ts";
+import { createMemoryMeetings } from "./memory-meetings.ts";
+import type { Meeting, MeetingStatus } from "./store.ts";
 
 test("meetingListQuerySchema defaults page to 1 and limit to 10", () => {
   const query = meetingListQuerySchema.parse({});
@@ -90,64 +90,6 @@ function sampleMeeting(input: {
   };
 }
 
-function matchesFilter(meeting: WithId<Meeting>, filter: MeetingFilter): boolean {
-  if (filter.status !== undefined && meeting.status !== filter.status) {
-    return false;
-  }
-  if (filter.sourceId !== undefined && meeting.sourceId !== filter.sourceId) {
-    return false;
-  }
-  if (filter.from !== undefined && meeting.createdAt < filter.from) {
-    return false;
-  }
-  if (filter.to !== undefined && meeting.createdAt >= filter.to) {
-    return false;
-  }
-  return true;
-}
-
-function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
-  listFilters: MeetingFilter[];
-  countFilters: MeetingFilter[];
-} {
-  const listFilters: MeetingFilter[] = [];
-  const countFilters: MeetingFilter[] = [];
-  return {
-    listFilters,
-    countFilters,
-    createId: () => new ObjectId(),
-    insert: async () => {
-      throw new Error("unused");
-    },
-    get: async () => {
-      throw new Error("unused");
-    },
-    list: async (skip, limit, filter) => {
-      listFilters.push(filter);
-      return items
-        .filter((item) => matchesFilter(item, filter))
-        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-        .slice(skip, skip + limit);
-    },
-    count: async (filter) => {
-      countFilters.push(filter);
-      return items.filter((item) => matchesFilter(item, filter)).length;
-    },
-    setStatus: async () => {
-      throw new Error("unused");
-    },
-    setReady: async () => {
-      throw new Error("unused");
-    },
-    setTaskStatus: async () => {
-      throw new Error("unused");
-    },
-    setFailed: async () => {
-      throw new Error("unused");
-    },
-  };
-}
-
 test("skipOf is (page - 1) * limit", () => {
   const query: MeetingListQuery = { page: 3, limit: 10 };
   assert.equal(skipOf(query), 20);
@@ -186,7 +128,7 @@ test("listMeetings shares one filter with list and count and skips by page", asy
       sourceId: "interview.mp4",
     }),
   ];
-  const store = fakeMeetingsStore([
+  const { meetings } = createMemoryMeetings([
     matching[0],
     matching[1],
     matching[2],
@@ -195,6 +137,7 @@ test("listMeetings shares one filter with list and count and skips by page", asy
     sampleMeeting({ createdAt: day, status: "queued", sourceId: "interview.mp4" }),
     sampleMeeting({ createdAt: day, status: "ready", sourceId: "other.mp4" }),
   ]);
+  const actor = { id: ownerId("user_a") };
   const query: MeetingListQuery = {
     page: 2,
     limit: 1,
@@ -203,13 +146,10 @@ test("listMeetings shares one filter with list and count and skips by page", asy
     status: "ready",
     sourceId: "interview.mp4",
   };
-  const page = await listMeetings(store, query);
-  assert.deepEqual(store.listFilters, [meetingFilter(query)]);
-  assert.deepEqual(store.countFilters, [meetingFilter(query)]);
-  assert.deepEqual(store.listFilters[0], store.countFilters[0]);
+  const page = await listMeetings(meetings, actor, query);
   assert.equal(page.total, 3);
   assert.equal(page.page, 2);
   assert.equal(page.limit, 1);
   assert.equal(page.items.length, 1);
-  assert.equal(page.items[0]?._id.toHexString(), matching[1]._id.toHexString());
+  assert.equal(page.items[0]?._id.toHexString(), matching[1]!._id.toHexString());
 });

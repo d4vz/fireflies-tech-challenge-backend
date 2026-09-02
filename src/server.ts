@@ -11,7 +11,7 @@ import { createOpenaiTranscribe } from "./lib/transcribe/openai/openai-transcrib
 import { createFfmpegVideo } from "./lib/video/ffmpeg/ffmpeg-video.ts";
 import { createApp } from "./create-app.ts";
 import { processMeetingJob } from "./features/meetings/process-meeting.ts";
-import { createMeetingsStore } from "./features/meetings/store.ts";
+import { createMongoMeetings } from "./features/meetings/mongo-meetings.ts";
 import { createTranscriptsStore } from "./features/meetings/transcripts.ts";
 
 const port = Number(process.env.PORT) || 3000;
@@ -24,7 +24,7 @@ const transcribe = createOpenaiTranscribe(settings.models.transcribe);
 const summarize = createOpenaiSummarize(settings.models.summary);
 const embed = createOpenaiEmbed(settings.models.embed);
 const model = openai(settings.models.chat);
-const meetings = createMeetingsStore(mongo);
+const mongoMeetings = createMongoMeetings(mongo);
 const transcripts = createTranscriptsStore(mongo);
 const queue = createBullmqQueue(secrets.REDIS_URL);
 const auth = createClerkAuthVerify(secrets.CLERK_SECRET_KEY);
@@ -35,7 +35,7 @@ const processDeps = {
   transcribe,
   summarize,
   embed,
-  meetings,
+  meetings: mongoMeetings.store,
   transcripts,
   settings,
 };
@@ -48,7 +48,7 @@ const app = createApp({
   video,
   blob,
   transcribe,
-  meetings,
+  meetings: mongoMeetings.meetings,
   transcripts,
   queue,
   settings,

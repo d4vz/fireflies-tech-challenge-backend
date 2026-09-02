@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ObjectId } from "mongodb";
 import { AuthError, ownerId, type AuthVerify } from "../../lib/auth/index.ts";
 import { createApp, type CreateAppDeps } from "../../create-app.ts";
 import { parseSettings } from "../../lib/config/index.ts";
-import type { MeetingsStore } from "../meetings/store.ts";
+import { createMemoryMeetings } from "../meetings/memory-meetings.ts";
 import { ASK_FRED_REASONING_EFFORT } from "./http.ts";
 
 const settings = parseSettings(`
@@ -49,17 +48,7 @@ function testAuth(): AuthVerify {
 }
 
 function testDeps(): CreateAppDeps {
-  const meetings: MeetingsStore = {
-    createId: () => new ObjectId(),
-    insert: async () => unused(),
-    get: async () => null,
-    list: async () => [],
-    count: async () => 0,
-    setStatus: async () => unused(),
-    setReady: async () => unused(),
-    setTaskStatus: async () => unused(),
-    setFailed: async () => unused(),
-  };
+  const { meetings } = createMemoryMeetings();
   return {
     video: {
       extract: async () => unused(),

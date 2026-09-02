@@ -1,8 +1,3 @@
-import { createWriteStream } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import path from "node:path";
-import { once } from "node:events";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Embed } from "../../lib/embed/index.ts";
@@ -11,6 +6,7 @@ import type { Transcribe } from "../../lib/transcribe/index.ts";
 import type { Video } from "../../lib/video/index.ts";
 import { meetingVideoKey, type MeetingsStore } from "./store.ts";
 import { tasksFromActionItems } from "./tasks.ts";
+import { tempFileFrom } from "./temp-file.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
 
 export type ProcessMeetingDeps = {
@@ -35,29 +31,6 @@ export function chunkText(text: string, size: number) {
   return chunks;
 }
 
-async function writeVideoTemp(body: ReadableStream<Uint8Array>) {
-  const dir = await mkdtemp(path.join(tmpdir(), "meeting-"));
-  const dest = path.join(dir, "video");
-  const writer = createWriteStream(dest);
-  try {
-    for await (const chunk of body) {
-      if (!writer.write(chunk)) {
-        await once(writer, "drain");
-      }
-    }
-    writer.end();
-    await once(writer, "finish");
-    return {
-      path: dest,
-      close: () => rm(dir, { recursive: true, force: true }),
-    };
-  } catch (error) {
-    writer.destroy();
-    await rm(dir, { recursive: true, force: true });
-    throw error;
-  }
-}
-
 export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string) {
   const { video, blob, transcribe, summarize, embed, meetings, transcripts, settings } = deps;
   await meetings.setStatus(meetingId, "processing");
@@ -67,7 +40,7 @@ export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string
     throw new Error("video is missing");
   }
 
-  const temp = await writeVideoTemp(stored.body);
+  const temp = await tempFileFrom(stored.body, "meeting-", "video");
   try {
     const audioPath = await video.extract(temp.path);
     const { text } = await transcribe.run(audioPath);

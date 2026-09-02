@@ -5,17 +5,12 @@ import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
 import { meetingName } from "./meeting-name.ts";
 import type { ClassifiedFile } from "./upload-file.ts";
-import {
-  meetingThumbnailKey,
-  meetingVideoKey,
-  type MeetingBlob,
-  type MeetingsStore,
-} from "./store.ts";
+import { meetingThumbnailKey, meetingVideoKey, type MeetingBlob, type Meetings } from "./store.ts";
 
 export type StoreMeetingDeps = {
   video: Video;
   blob: Blob;
-  meetings: MeetingsStore;
+  meetings: Meetings;
   queue: Queue;
 };
 
@@ -88,7 +83,6 @@ export async function storeMeeting(
 
   const meeting = {
     _id,
-    userId: actor.id,
     sourceType: "upload" as const,
     sourceId: file.name || "video",
     name: meetingName(file.name || "video", name),
@@ -97,13 +91,13 @@ export async function storeMeeting(
     blob: meetingBlob,
   };
 
-  await meetings.insert(meeting);
+  await meetings.insert(actor, meeting);
   try {
     await queue.enqueue(id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "queue failed";
-    await meetings.setFailed(id, message);
+    await meetings.setFailed(actor, id, message);
     throw error;
   }
-  return meeting;
+  return { ...meeting, userId: actor.id };
 }

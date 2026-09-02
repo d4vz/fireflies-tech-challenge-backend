@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ObjectId } from "mongodb";
 import { ownerId } from "../../lib/auth/index.ts";
+import { createMemoryMeetings } from "./memory-meetings.ts";
 import { storeMeeting } from "./store-meeting.ts";
 import type { ClassifiedFile } from "./upload-file.ts";
-import type { Meeting, MeetingsStore } from "./store.ts";
 
 function unused(): never {
   throw new Error("unused");
@@ -13,19 +13,10 @@ function unused(): never {
 test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
   let thumbnailCalls = 0;
   const keys: string[] = [];
-  const inserted: Meeting[] = [];
-  const meetings: MeetingsStore = {
+  const { meetings: owned } = createMemoryMeetings();
+  const meetings = {
+    ...owned,
     createId: () => new ObjectId("6a963d4f786296c73b01d6d0"),
-    insert: async (meeting) => {
-      inserted.push(meeting);
-    },
-    get: async () => unused(),
-    list: async () => unused(),
-    count: async () => unused(),
-    setStatus: async () => unused(),
-    setReady: async () => unused(),
-    setTaskStatus: async () => unused(),
-    setFailed: async () => unused(),
   };
   const file: ClassifiedFile = {
     name: "talk.mp3",
@@ -34,6 +25,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
     path: "/dev/null",
     kind: "audio",
   };
+  const actor = { id: ownerId("user_a") };
   const meeting = await storeMeeting(
     {
       video: {
@@ -56,7 +48,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
       queue: { enqueue: async () => undefined },
     },
     file,
-    { id: ownerId("user_a") },
+    actor,
   );
   assert.equal(thumbnailCalls, 0);
   assert.deepEqual(keys, ["meetings/6a963d4f786296c73b01d6d0/video"]);
@@ -64,6 +56,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
   assert.equal(meeting.name, "talk");
   assert.equal(meeting.sourceId, "talk.mp3");
   assert.equal(meeting.userId, ownerId("user_a"));
-  assert.equal(inserted[0]?.blob.kind, "audio");
-  assert.equal(inserted[0]?.userId, ownerId("user_a"));
+  const stored = await meetings.get(actor, "6a963d4f786296c73b01d6d0");
+  assert.equal(stored?.blob.kind, "audio");
+  assert.equal(stored?.userId, ownerId("user_a"));
 });

@@ -2,21 +2,15 @@ import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
 import { zValidator } from "@hono/zod-validator";
 import { z } from "zod";
-import type { Actor } from "../../lib/auth/index.ts";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { AppEnv } from "../../lib/middleware/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
 import { createRequestTempFile, classifyUpload } from "./upload-file.ts";
-import { withMeetingName } from "./meeting-name.ts";
+import { withPublicCard } from "./public-meeting.ts";
 import { storeMeeting } from "./store-meeting.ts";
-import {
-  meetingThumbnailKey,
-  meetingVideoKey,
-  type MeetingsStore,
-  type OwnedMeetings,
-} from "./store.ts";
+import { meetingThumbnailKey, meetingVideoKey, type Meetings } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
 import { listActions, actionListQuerySchema } from "./actions-query.ts";
 import { listMeetings, meetingListQuerySchema } from "./list-query.ts";
@@ -29,8 +23,7 @@ const taskStatusSchema = z.object({
 export type MeetingsHttpDeps = {
   video: Video;
   blob: Blob;
-  meetings: MeetingsStore;
-  ownedMeetings: (actor: Actor) => OwnedMeetings;
+  meetings: Meetings;
   transcripts: TranscriptsStore;
   queue: Queue;
   settings: AppSettings;
@@ -51,15 +44,15 @@ async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
 
 export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   app.get("/meetings", zValidator("query", meetingListQuerySchema), async (c) => {
-    return c.json(await listMeetings(deps.ownedMeetings(c.get("actor")), c.req.valid("query")));
+    return c.json(await listMeetings(deps.meetings, c.get("actor"), c.req.valid("query")));
   });
 
   app.get("/actions", zValidator("query", actionListQuerySchema), async (c) => {
-    return c.json(await listActions(deps.ownedMeetings(c.get("actor")), c.req.valid("query")));
+    return c.json(await listActions(deps.meetings, c.get("actor"), c.req.valid("query")));
   });
 
   app.get("/meetings/:id/thumbnail", async (c) => {
-    const meeting = await deps.ownedMeetings(c.get("actor")).get(c.req.param("id"));
+    const meeting = await deps.meetings.get(c.get("actor"), c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "not found" }, 404);
     }
@@ -73,7 +66,7 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   });
 
   app.get("/meetings/:id/video", async (c) => {
-    const meeting = await deps.ownedMeetings(c.get("actor")).get(c.req.param("id"));
+    const meeting = await deps.meetings.get(c.get("actor"), c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "not found" }, 404);
     }
@@ -87,7 +80,7 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   });
 
   app.get("/meetings/:id/transcripts", async (c) => {
-    const meeting = await deps.ownedMeetings(c.get("actor")).get(c.req.param("id"));
+    const meeting = await deps.meetings.get(c.get("actor"), c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "meeting not found" }, 404);
     }
@@ -95,16 +88,16 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   });
 
   app.get("/meetings/:id", async (c) => {
-    const meeting = await deps.ownedMeetings(c.get("actor")).get(c.req.param("id"));
+    const meeting = await deps.meetings.get(c.get("actor"), c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "meeting not found" }, 404);
     }
-    return c.json(withMeetingName(meeting));
+    return c.json(withPublicCard(meeting));
   });
 
   app.patch("/meetings/:id/tasks/:taskId", zValidator("json", taskStatusSchema), async (c) => {
-    const owned = deps.ownedMeetings(c.get("actor"));
-    const result = await owned.setTaskStatus(
+    const result = await deps.meetings.setTaskStatus(
+      c.get("actor"),
       c.req.param("id"),
       c.req.param("taskId"),
       c.req.valid("json").status,
@@ -140,7 +133,7 @@ export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
 
       try {
         const meeting = await storeMeeting(deps, classified, c.get("actor"), c.req.query("name"));
-        return c.json(withMeetingName(meeting), 201);
+        return c.json(withPublicCard(meeting), 201);
       } finally {
         await closeFile();
       }

@@ -8,11 +8,12 @@ import {
   listActions,
   type ActionListQuery,
 } from "./actions-query.ts";
-import type { MeetingFilter } from "./list-query.ts";
-import type { Meeting, MeetingsStore } from "./store.ts";
+import { createMemoryMeetings } from "./memory-meetings.ts";
+import type { Meeting } from "./store.ts";
 import type { MeetingTask, TaskStatus } from "./tasks.ts";
 
 const at = new Date("2026-09-01T12:00:00.000Z");
+const actor = { id: ownerId("user_a") };
 
 function task(text: string, status: TaskStatus, id = new ObjectId()): MeetingTask {
   return { _id: id, text, status, updatedAt: at };
@@ -51,58 +52,6 @@ function sampleMeeting(input: {
   };
 }
 
-function matchesFilter(meeting: WithId<Meeting>, filter: MeetingFilter): boolean {
-  if (filter.taskStatus !== undefined) {
-    return (meeting.tasks ?? []).some((item) => item.status === filter.taskStatus);
-  }
-  if (filter.hasTasks === true) {
-    return (meeting.tasks ?? []).length > 0;
-  }
-  return true;
-}
-
-function fakeMeetingsStore(items: WithId<Meeting>[]): MeetingsStore & {
-  listFilters: MeetingFilter[];
-  countFilters: MeetingFilter[];
-} {
-  const listFilters: MeetingFilter[] = [];
-  const countFilters: MeetingFilter[] = [];
-  return {
-    listFilters,
-    countFilters,
-    createId: () => new ObjectId(),
-    insert: async () => {
-      throw new Error("unused");
-    },
-    get: async () => {
-      throw new Error("unused");
-    },
-    list: async (skip, limit, filter) => {
-      listFilters.push(filter);
-      return items
-        .filter((item) => matchesFilter(item, filter))
-        .sort((left, right) => right.createdAt.getTime() - left.createdAt.getTime())
-        .slice(skip, skip + limit);
-    },
-    count: async (filter) => {
-      countFilters.push(filter);
-      return items.filter((item) => matchesFilter(item, filter)).length;
-    },
-    setStatus: async () => {
-      throw new Error("unused");
-    },
-    setReady: async () => {
-      throw new Error("unused");
-    },
-    setTaskStatus: async () => {
-      throw new Error("unused");
-    },
-    setFailed: async () => {
-      throw new Error("unused");
-    },
-  };
-}
-
 test("actionListQuerySchema defaults page and limit", () => {
   const query = actionListQuerySchema.parse({});
   assert.equal(query.page, 1);
@@ -137,11 +86,9 @@ test("listActions pages meeting groups and keeps only matching tasks", async () 
     createdAt: new Date("2026-09-03T12:00:00.000Z"),
     tasks: [],
   });
-  const store = fakeMeetingsStore([newer, older, empty]);
+  const { meetings } = createMemoryMeetings([newer, older, empty]);
   const query: ActionListQuery = { page: 1, limit: 10, status: "pending" };
-  const page = await listActions(store, query);
-  assert.deepEqual(store.listFilters, [actionFilter(query)]);
-  assert.deepEqual(store.countFilters, [actionFilter(query)]);
+  const page = await listActions(meetings, actor, query);
   assert.equal(page.total, 2);
   assert.equal(page.items.length, 2);
   assert.equal(page.items[0]?.sourceId, "newer.mp4");
@@ -163,7 +110,8 @@ test("listActions stamps audio mediaKind from the blob", async () => {
     tasks: [task("listen", "pending")],
     kind: "audio",
   });
-  const page = await listActions(fakeMeetingsStore([meeting]), { page: 1, limit: 10 });
+  const { meetings } = createMemoryMeetings([meeting]);
+  const page = await listActions(meetings, actor, { page: 1, limit: 10 });
   assert.equal(page.items[0]?.mediaKind, "audio");
 });
 
@@ -178,8 +126,8 @@ test("listActions skips by page of meeting groups", async () => {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     tasks: [task("two", "pending")],
   });
-  const store = fakeMeetingsStore([first, second]);
-  const page = await listActions(store, { page: 2, limit: 1 });
+  const { meetings } = createMemoryMeetings([first, second]);
+  const page = await listActions(meetings, actor, { page: 2, limit: 1 });
   assert.equal(page.total, 2);
   assert.equal(page.items.length, 1);
   assert.equal(page.items[0]?.sourceId, "b.mp4");

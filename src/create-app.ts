@@ -13,16 +13,16 @@ import { mountAskFred } from "./features/ask-fred/http.ts";
 import { mountHealth } from "./features/health/http.ts";
 import { listActions } from "./features/meetings/actions-query.ts";
 import { listMeetings } from "./features/meetings/list-query.ts";
-import { searchMeetingTranscripts, searchTranscripts } from "./features/meetings/search.ts";
+import { searchTranscripts } from "./features/meetings/search.ts";
 import { mountMeetings } from "./features/meetings/http.ts";
-import { forActor, type MeetingsStore } from "./features/meetings/store.ts";
+import type { Meetings } from "./features/meetings/store.ts";
 import type { TranscriptsStore } from "./features/meetings/transcripts.ts";
 
 export type CreateAppDeps = {
   video: Video;
   blob: Blob;
   transcribe: Transcribe;
-  meetings: MeetingsStore;
+  meetings: Meetings;
   transcripts: TranscriptsStore;
   queue: Queue;
   settings: AppSettings;
@@ -37,30 +37,23 @@ export function createApp(deps: CreateAppDeps) {
   mountMiddleware(app);
   mountHealth(app, deps);
   app.use("*", requireActor(deps.auth));
-  const ownedMeetings = (actor: Actor) => forActor(deps.meetings, actor);
-  mountMeetings(app, { ...deps, ownedMeetings });
+  mountMeetings(app, deps);
 
   mountAskFred(app, {
     model: deps.model,
     origin: deps.origin,
-    toolsFor: (actor) => {
-      const owned = ownedMeetings(actor);
-      return createAskFredTools({
+    toolsFor: (actor: Actor) =>
+      createAskFredTools({
         model: deps.model,
-        listMeetings: (query) => listMeetings(owned, query),
-        listActions: (query) => listActions(owned, query),
+        listMeetings: (query) => listMeetings(deps.meetings, actor, query),
+        listActions: (query) => listActions(deps.meetings, actor, query),
         searchTranscripts: (query) =>
           searchTranscripts(
-            { meetings: owned, transcripts: deps.transcripts, embed: deps.embed },
+            { meetings: deps.meetings, transcripts: deps.transcripts, embed: deps.embed },
+            actor,
             query,
           ),
-        searchMeetingTranscripts: (query) =>
-          searchMeetingTranscripts(
-            { meetings: owned, transcripts: deps.transcripts, embed: deps.embed },
-            query,
-          ),
-      });
-    },
+      }),
   });
 
   return app;

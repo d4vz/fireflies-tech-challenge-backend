@@ -1,7 +1,8 @@
 import { z } from "zod";
-import type { MeetingFilter } from "./list-query.ts";
-import { meetingName } from "./meeting-name.ts";
-import type { MeetingsStore } from "./store.ts";
+import type { Actor } from "../../lib/auth/index.ts";
+import type { MeetingQuery, Meetings } from "./store.ts";
+import { pageQuerySchema, skipOf, type Page, type PageQuery } from "./page.ts";
+import { publicMeeting } from "./public-meeting.ts";
 import {
   matchingTasks,
   toPublicMeetingTask,
@@ -9,9 +10,7 @@ import {
   type TaskStatus,
 } from "./tasks.ts";
 
-export type ActionListQuery = {
-  page: number;
-  limit: number;
+export type ActionListQuery = PageQuery & {
   status?: TaskStatus;
 };
 
@@ -25,50 +24,40 @@ export type ActionGroup = {
   tasks: PublicMeetingTask[];
 };
 
-export type ActionListPage = {
-  items: ActionGroup[];
-  total: number;
-  page: number;
-  limit: number;
-};
+export type ActionListPage = Page<ActionGroup>;
 
-export const actionListQuerySchema: z.ZodType<ActionListQuery> = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(50).default(10),
+export const actionListQuerySchema: z.ZodType<ActionListQuery> = pageQuerySchema.extend({
   status: z.enum(["pending", "completed"]).optional(),
 });
 
-export function actionFilter(query: ActionListQuery): MeetingFilter {
+export function actionFilter(query: ActionListQuery): MeetingQuery {
   if (query.status !== undefined) {
     return { taskStatus: query.status };
   }
   return { hasTasks: true };
 }
 
-function meetingHref(id: string) {
-  return `/meetings/${id}`;
-}
-
 export async function listActions(
-  store: Pick<MeetingsStore, "list" | "count">,
+  meetings: Meetings,
+  actor: Actor,
   query: ActionListQuery,
 ): Promise<ActionListPage> {
   const filter = actionFilter(query);
-  const skip = (query.page - 1) * query.limit;
-  const [meetings, total] = await Promise.all([
-    store.list(skip, query.limit, filter),
-    store.count(filter),
+  const skip = skipOf(query);
+  const [rows, total] = await Promise.all([
+    meetings.list(actor, skip, query.limit, filter),
+    meetings.count(actor, filter),
   ]);
   return {
-    items: meetings.map((meeting) => {
-      const meetingId = meeting._id.toHexString();
+    items: rows.map((meeting) => {
+      const view = publicMeeting(meeting);
       return {
-        meetingId,
-        sourceId: meeting.sourceId,
-        name: meetingName(meeting.sourceId, meeting.name),
-        createdAt: meeting.createdAt.toISOString(),
-        href: meetingHref(meetingId),
-        mediaKind: meeting.blob.kind === "audio" ? "audio" : "video",
+        meetingId: view.id,
+        sourceId: view.sourceId,
+        name: view.name,
+        createdAt: view.createdAt,
+        href: view.href,
+        mediaKind: view.mediaKind,
         tasks: matchingTasks(meeting.tasks, query.status).map(toPublicMeetingTask),
       };
     }),

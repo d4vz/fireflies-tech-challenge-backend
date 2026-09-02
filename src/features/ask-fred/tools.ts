@@ -1,71 +1,52 @@
 import { tool, type LanguageModel } from "ai";
-import type { WithId } from "mongodb";
 import { z } from "zod";
-import {
-  actionListQuerySchema,
-  type ActionListPage,
-  type ActionListQuery,
-} from "../meetings/actions-query.ts";
-import {
-  meetingListQuerySchema,
-  type MeetingListPage,
-  type MeetingListQuery,
-} from "../meetings/list-query.ts";
+import type { ActionListPage, ActionListQuery } from "../meetings/actions-query.ts";
+import type { MeetingListPage, MeetingListQuery } from "../meetings/list-query.ts";
+import { fromBeforeTo, pageToolSchema } from "../meetings/page.ts";
+import { meetingHref, publicMeeting } from "../meetings/public-meeting.ts";
 import {
   meetingTranscriptSearchQuerySchema,
   transcriptSearchQuerySchema,
-  type MeetingTranscriptSearchQuery,
   type TranscriptHit,
   type TranscriptSearchQuery,
 } from "../meetings/search.ts";
-import { meetingName } from "../meetings/meeting-name.ts";
-import type { Meeting } from "../meetings/store.ts";
 
 export type AskFredDeps = {
   model: LanguageModel;
   listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
   listActions: (query: ActionListQuery) => Promise<ActionListPage>;
   searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
-  searchMeetingTranscripts: (query: MeetingTranscriptSearchQuery) => Promise<TranscriptHit[]>;
 };
 
-function meetingHref(id: string) {
-  return `/meetings/${id}`;
-}
+export const listMeetingsToolSchema = pageToolSchema
+  .extend({
+    from: z.iso.datetime().optional(),
+    to: z.iso.datetime().optional(),
+    status: z.enum(["queued", "processing", "ready", "failed"]).optional(),
+  })
+  .refine(fromBeforeTo, { message: "from must be before to" });
 
-type AskFredMeeting = {
-  id: string;
-  sourceId: string;
-  name: string;
-  createdAt: string;
-  status: Meeting["status"];
-  href: string;
-  summary?: Meeting["summary"];
-  error?: string;
-};
+export const listActionsToolSchema = pageToolSchema.extend({
+  status: z.enum(["pending", "completed"]).optional(),
+});
 
-function toAskFredMeeting(meeting: WithId<Meeting>): AskFredMeeting {
-  const id = meeting._id.toHexString();
-  const card: AskFredMeeting = {
-    id,
-    sourceId: meeting.sourceId,
-    name: meetingName(meeting.sourceId, meeting.name),
-    createdAt: meeting.createdAt.toISOString(),
-    status: meeting.status,
-    href: meetingHref(id),
-  };
-  if (meeting.summary !== undefined) {
-    card.summary = meeting.summary;
+function meetingListQueryFromTool(input: z.infer<typeof listMeetingsToolSchema>): MeetingListQuery {
+  const query: MeetingListQuery = { page: input.page, limit: input.limit };
+  if (input.from !== undefined) {
+    query.from = new Date(input.from);
   }
-  if (meeting.error !== undefined) {
-    card.error = meeting.error;
+  if (input.to !== undefined) {
+    query.to = new Date(input.to);
   }
-  return card;
+  if (input.status !== undefined) {
+    query.status = input.status;
+  }
+  return query;
 }
 
 function toAskFredMeetingPage(page: MeetingListPage) {
   return {
-    items: page.items.map(toAskFredMeeting),
+    items: page.items.map(publicMeeting),
     total: page.total,
     page: page.page,
     limit: page.limit,
@@ -85,24 +66,6 @@ function toAskFredTranscriptHit(hit: TranscriptHit) {
   };
 }
 
-export const listMeetingsToolSchema = z
-  .object({
-    page: z.number().int().positive().default(1),
-    limit: z.number().int().positive().max(50).default(10),
-    from: z.iso.datetime().optional(),
-    to: z.iso.datetime().optional(),
-    status: z.enum(["queued", "processing", "ready", "failed"]).optional(),
-  })
-  .refine((query) => query.from === undefined || query.to === undefined || query.from < query.to, {
-    message: "from must be before to",
-  });
-
-export const listActionsToolSchema = z.object({
-  page: z.number().int().positive().default(1),
-  limit: z.number().int().positive().max(50).default(10),
-  status: z.enum(["pending", "completed"]).optional(),
-});
-
 export function createAskFredTools(deps: AskFredDeps) {
   return {
     listMeetings: tool({
@@ -116,11 +79,7 @@ export function createAskFredTools(deps: AskFredDeps) {
       ].join(" "),
       inputSchema: listMeetingsToolSchema,
       execute: async (query) =>
-        toAskFredMeetingPage(
-          await deps.listMeetings(
-            meetingListQuerySchema.parse(listMeetingsToolSchema.parse(query)),
-          ),
-        ),
+        toAskFredMeetingPage(await deps.listMeetings(meetingListQueryFromTool(query))),
     }),
     listActions: tool({
       description: [
@@ -132,8 +91,7 @@ export function createAskFredTools(deps: AskFredDeps) {
         "- 'what did I complete?' → status=completed.",
       ].join(" "),
       inputSchema: listActionsToolSchema,
-      execute: async (query) =>
-        deps.listActions(actionListQuerySchema.parse(listActionsToolSchema.parse(query))),
+      execute: async (query) => deps.listActions(query),
     }),
     searchTranscripts: tool({
       description: [
@@ -159,8 +117,7 @@ export function createAskFredTools(deps: AskFredDeps) {
         "- follow-up on a meeting you just listed",
       ].join(" "),
       inputSchema: meetingTranscriptSearchQuerySchema,
-      execute: async (query) =>
-        (await deps.searchMeetingTranscripts(query)).map(toAskFredTranscriptHit),
+      execute: async (query) => (await deps.searchTranscripts(query)).map(toAskFredTranscriptHit),
     }),
   };
 }
