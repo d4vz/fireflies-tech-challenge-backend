@@ -4,8 +4,10 @@ import OpenAI, { toFile } from "openai";
 import type { Transcribe } from "../index.ts";
 import { toTranscript, diarizedResponseSchema } from "./to-transcript.ts";
 
+export const TRANSCRIBE_TIMEOUT_MS = 30 * 60 * 1_000;
+
 export function createOpenaiTranscribe(model: string): Transcribe {
-  const client = new OpenAI();
+  const client = new OpenAI({ timeout: TRANSCRIBE_TIMEOUT_MS });
   return {
     run: async (audioPath) => {
       const transcription = await client.audio.transcriptions.create({
