@@ -1,3 +1,4 @@
+import { createReadStream } from "node:fs";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Summarize } from "../../lib/summarize/index.ts";
@@ -27,35 +28,36 @@ export type UploadEvent =
 
 export async function* uploadMeeting(
   deps: UploadMeetingDeps,
-  file: File,
+  file: { name: string; type: string; size: number; path: string },
 ): AsyncGenerator<UploadEvent> {
   const { video, blob, transcribe, summarize, meetings, settings } = deps;
   const _id = meetings.createId();
 
   async function storeThumbnail() {
-    const thumb = await video.thumbnail(file);
+    const thumb = await video.thumbnail(file.path);
+    const body = new Uint8Array(await thumb.arrayBuffer());
     return blob.put({
       key: meetingThumbnailKey(_id.toHexString()),
-      body: new Uint8Array(await thumb.arrayBuffer()),
+      body,
       contentType: thumb.type || "image/jpeg",
+      size: body.byteLength,
     });
   }
 
   async function transcribeFile() {
-    const audioFile = await video.extract(file);
-    return transcribe.run(audioFile);
+    const audioPath = await video.extract(file.path);
+    return transcribe.run(audioPath);
   }
 
   yield { event: "progress", stage: "storing" };
   const [url, durationInSeconds, thumbnailUrl] = await Promise.all([
-    file.arrayBuffer().then((body) =>
-      blob.put({
-        key: meetingVideoKey(_id.toHexString()),
-        body: new Uint8Array(body),
-        contentType: file.type || "video/mp4",
-      }),
-    ),
-    video.durationInSeconds(file),
+    blob.put({
+      key: meetingVideoKey(_id.toHexString()),
+      body: createReadStream(file.path),
+      contentType: file.type || "video/mp4",
+      size: file.size,
+    }),
+    video.durationInSeconds(file.path),
     storeThumbnail(),
   ]);
 

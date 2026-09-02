@@ -1,7 +1,10 @@
+import type { Readable } from "node:stream";
+
 export type PutBlob = {
   key: string;
-  body: Uint8Array;
+  body: Uint8Array | Readable;
   contentType: string;
+  size?: number;
 };
 
 export type Blob = {

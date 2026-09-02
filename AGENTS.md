@@ -22,7 +22,7 @@
 
 ## Seam
 
-A capability `index.ts` is the test surface. Feature tests never import a vendor folder. Feature tests fake the feature Store.
+A capability `index.ts` is the test surface. Feature tests never import a vendor folder. Feature tests fake the feature Store. Do not write regression tests.
 
 Add a vendor adapter only when something actually varies (MinIO vs in-memory).
 

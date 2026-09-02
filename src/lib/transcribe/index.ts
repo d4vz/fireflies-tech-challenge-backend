@@ -3,6 +3,6 @@ export type Transcript = {
 };
 
 export type Transcribe = {
-  run: (file: File) => Promise<Transcript>;
+  run: (audioPath: string) => Promise<Transcript>;
   ping: () => Promise<void>;
 };

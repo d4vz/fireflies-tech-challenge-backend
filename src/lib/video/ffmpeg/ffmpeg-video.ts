@@ -1,6 +1,5 @@
 import { spawn } from "node:child_process";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import type { Video } from "../index.ts";
 
@@ -34,18 +33,14 @@ function run(command: string, args: string[]) {
   });
 }
 
-async function writeInput(file: File) {
-  const dir = await mkdtemp(path.join(tmpdir(), "media-"));
-  const inputPath = path.join(dir, file.name || "input.mp4");
-  await writeFile(inputPath, Buffer.from(await file.arrayBuffer()));
-  return { dir, inputPath };
+function beside(inputPath: string, name: string) {
+  return path.join(path.dirname(inputPath), name);
 }
 
 export function createFfmpegVideo(): Video {
   return {
-    extract: async (file) => {
-      const { dir, inputPath } = await writeInput(file);
-      const outputPath = path.join(dir, "audio.mp3");
+    extract: async (inputPath) => {
+      const outputPath = beside(inputPath, "audio.mp3");
       await run("ffmpeg", [
         "-y",
         "-i",
@@ -57,11 +52,9 @@ export function createFfmpegVideo(): Video {
         "4",
         outputPath,
       ]);
-      const audio = await readFile(outputPath);
-      return new File([audio], "audio.mp3", { type: "audio/mpeg" });
+      return outputPath;
     },
-    durationInSeconds: async (file) => {
-      const { inputPath } = await writeInput(file);
+    durationInSeconds: async (inputPath) => {
       const output = await run("ffprobe", [
         "-v",
         "error",
@@ -77,9 +70,8 @@ export function createFfmpegVideo(): Video {
       }
       return Math.round(seconds);
     },
-    thumbnail: async (file) => {
-      const { dir, inputPath } = await writeInput(file);
-      const outputPath = path.join(dir, "thumb.jpg");
+    thumbnail: async (inputPath) => {
+      const outputPath = beside(inputPath, "thumb.jpg");
       await run("ffmpeg", [
         "-y",
         "-i",

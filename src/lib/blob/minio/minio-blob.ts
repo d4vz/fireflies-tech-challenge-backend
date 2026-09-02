@@ -1,11 +1,8 @@
-import {
-  CreateBucketCommand,
-  HeadBucketCommand,
-  PutObjectCommand,
-  S3Client,
-} from "@aws-sdk/client-s3";
+import { CreateBucketCommand, HeadBucketCommand, S3Client } from "@aws-sdk/client-s3";
+import { Upload } from "@aws-sdk/lib-storage";
+import { NodeHttpHandler } from "@smithy/node-http-handler";
 import { parseSecrets } from "../../config/index.ts";
-import type { Blob } from "../index.ts";
+import type { Blob, PutBlob } from "../index.ts";
 
 export type MinioBlobConfig = {
   endpoint: string;
@@ -24,6 +21,16 @@ async function ensureBucket(client: S3Client, bucket: string) {
   }
 }
 
+function contentLength(input: PutBlob) {
+  if (input.size != null) {
+    return input.size;
+  }
+  if (input.body instanceof Uint8Array) {
+    return input.body.byteLength;
+  }
+  throw new Error("stream uploads require size");
+}
+
 export function createMinioBlob(config: MinioBlobConfig): Blob {
   const client = new S3Client({
     endpoint: config.endpoint,
@@ -33,19 +40,24 @@ export function createMinioBlob(config: MinioBlobConfig): Blob {
       secretAccessKey: config.secretKey,
     },
     forcePathStyle: true,
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
+    requestHandler: new NodeHttpHandler({ requestTimeout: 0 }),
   });
 
   return {
     put: async (input) => {
       await ensureBucket(client, config.bucket);
-      await client.send(
-        new PutObjectCommand({
+      await new Upload({
+        client,
+        params: {
           Bucket: config.bucket,
           Key: input.key,
           Body: input.body,
+          ContentLength: contentLength(input),
           ContentType: input.contentType,
-        }),
-      );
+        },
+      }).done();
       const base = config.publicEndpoint.replace(/\/$/, "");
       return `${base}/${config.bucket}/${input.key}`;
     },
