@@ -8,7 +8,7 @@ Meetings live in [MongoDB](https://www.mongodb.com). An upload can be video or a
 
 Blobs go to [MinIO](https://min.io). It is S3-compatible, open source, and we run it ourselves.
 
-[Redis](https://redis.io) backs [BullMQ](https://docs.bullmq.io). Upload should return as soon as the file is stored. ffmpeg and OpenAI take longer than that, so the worker runs those jobs in the background.
+[Redis](https://redis.io) backs [BullMQ](https://docs.bullmq.io). Upload should return as soon as the file is stored. ffmpeg and transcription take longer than that, so the worker runs those jobs in the background.
 
 ![Upload pipeline](assets/upload.svg)
 
@@ -34,9 +34,9 @@ return new Worker<MeetingJobData>(
 );
 ```
 
-The worker marks the meeting `processing`, pulls the file from MinIO, and extracts audio with ffmpeg. OpenAI transcribes it, then we chunk the text and embed the chunks. A summary pass creates takeaways and action items. Transcripts land in Mongo, the meeting is marked `ready`, and AskFred can search it.
+The worker marks the meeting `processing`, pulls the file from MinIO, and extracts audio with ffmpeg. AssemblyAI transcribes the audio with speaker labels. Then we chunk the text and OpenAI embeds the chunks. OpenAI also runs a summary pass that creates takeaways and action items. Transcripts land in Mongo, the meeting is marked `ready`, and AskFred can search it.
 
-Files longer than about 10 minutes can stay `processing` for a long time. I found that while building this. Transcription is the slow step, and that wait is an OpenAI limitation, not the queue.
+I tried OpenAI `gpt-4o-transcribe-diarize` first. A 5-minute clip took 133 seconds to transcribe. A 10-minute clip was still running after 15 minutes, then failed. That wait was OpenAI, not the queue. I switched to AssemblyAI. The same 10-minute file transcribed in 15 seconds, at least 60 times faster, with speaker labels on the whole file. A 5-minute file took 13 seconds.
 
 ## Data
 
@@ -99,13 +99,13 @@ await collection.createSearchIndex({
 
 ## Models
 
-Transcription, summaries, embeddings, and chat all go through [OpenAI](https://platform.openai.com). One API key covers the four jobs. The model names live in [config.yaml](config.yaml).
+Transcription uses [AssemblyAI](https://www.assemblyai.com). The name in [config.yaml](config.yaml) is `assemblyai`. Summaries, embeddings, and chat still use [OpenAI](https://platform.openai.com). You still need `OPENAI_API_KEY`. The default config needs both keys. Set `models.transcribe` to `gpt-4o-transcribe-diarize` to use OpenAI for transcription. Then `ASSEMBLYAI_API_KEY` can stay empty.
 
 AskFred uses the [AI SDK](https://ai-sdk.dev) because it provides a simple interface for adding tools and other agent capabilities. It is also provider-agnostic: to switch providers later, we only need to pass a different model implementation.
 
 ## Run
 
-You need [Docker](https://docs.docker.com/get-docker/) and [Bun](https://bun.sh). You also need an [OpenAI](https://platform.openai.com) API key and a [Clerk](https://clerk.com) secret key.
+You need [Docker](https://docs.docker.com/get-docker/) and [Bun](https://bun.sh). You also need an [OpenAI](https://platform.openai.com) API key, an [AssemblyAI](https://www.assemblyai.com) API key, and a [Clerk](https://clerk.com) secret key.
 
 ```
 curl -fsSL https://bun.sh/install | bash
@@ -117,7 +117,7 @@ I used the Atlas local image so `$vectorSearch` works on your machine. ffmpeg is
 cp .env.example .env
 ```
 
-Fill in `OPENAI_API_KEY` and `CLERK_SECRET_KEY`. Then start the whole backend:
+Fill in `OPENAI_API_KEY`, `ASSEMBLYAI_API_KEY`, and `CLERK_SECRET_KEY`. Then start the whole backend:
 
 ```
 docker compose up --build

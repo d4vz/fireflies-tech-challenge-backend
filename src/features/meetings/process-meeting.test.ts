@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 import { ObjectId } from "mongodb";
 import { ownerId } from "../../lib/auth/index.ts";
@@ -11,7 +12,7 @@ import type { MeetingDraft, MeetingsStore } from "./store.ts";
 const settings = parseSettings(`
 chunkSize: 5
 models:
-  transcribe: gpt-4o-transcribe
+  transcribe: gpt-4o-transcribe-diarize
   summary: gpt-4o-mini
   embed: text-embedding-3-small
   chat: gpt-4o-mini
@@ -75,7 +76,7 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
   const deps: ProcessMeetingDeps = {
     video: {
       extract: async (inputPath) => inputPath,
-      durationInSeconds: async () => unused(),
+      durationInSeconds: async () => 1,
       thumbnail: async () => unused(),
     },
     blob: {
@@ -83,7 +84,13 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
       get: blobGet,
       ping: async () => undefined,
     },
-    transcribe: { run: async () => ({ text: "abcdefghij" }), ping: async () => undefined },
+    transcribe: {
+      run: async () => ({
+        text: "A: abcdefghij",
+        segments: [{ speaker: "A", start: 0, end: 2, text: "abcdefghij" }],
+      }),
+      ping: async () => undefined,
+    },
     summarize: {
       run: async () => ({
         text: "summary",
@@ -102,23 +109,93 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
   return { id: row._id.toHexString(), store, meetings, transcripts, deps };
 }
 
-test("processMeeting marks ready with chunks and tasks", async () => {
+test("processMeeting marks ready with turns and tasks", async () => {
   const { id, meetings, transcripts, deps } = await queuedJob(async () => ({
     body: bytesStream(new Uint8Array([1, 2, 3])),
     contentType: "video/mp4",
   }));
+  let summarized = "";
+  deps.summarize = {
+    run: async (transcript) => {
+      summarized = transcript;
+      return {
+        text: "summary",
+        takeaways: ["one"],
+        actionItems: ["review notes"],
+      };
+    },
+  };
   await processMeeting(deps, id);
   const ready = await meetings.get(actor, id);
   assert.equal(ready?.status, "ready");
   assert.equal(ready?.summary?.text, "summary");
   assert.equal(ready?.tasks?.length, 1);
   assert.equal(ready?.tasks?.[0]?.text, "review notes");
-  const chunks = await transcripts.listByMeeting(id);
-  assert.equal(chunks.length, 2);
-  assert.deepEqual(
-    chunks.map((chunk) => chunk.text),
-    ["abcde", "fghij"],
-  );
+  assert.equal(summarized, "A: abcdefghij");
+  const turns = await transcripts.listByMeeting(id);
+  assert.deepEqual(turns, [{ index: 0, speaker: "A", start: 0, end: 2, text: "abcdefghij" }]);
+});
+
+test("processMeeting stays ready with no chunks when segments are empty", async () => {
+  const { id, meetings, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  deps.transcribe = {
+    run: async () => ({ text: "", segments: [] }),
+    ping: async () => undefined,
+  };
+  let summarized = "unset";
+  deps.summarize = {
+    run: async (transcript) => {
+      summarized = transcript;
+      return {
+        text: "summary",
+        takeaways: ["one"],
+        actionItems: ["review notes"],
+      };
+    },
+  };
+  await processMeeting(deps, id);
+  const ready = await meetings.get(actor, id);
+  assert.equal(ready?.status, "ready");
+  assert.equal(ready?.summary?.text, "summary");
+  assert.deepEqual(await transcripts.listByMeeting(id), []);
+  assert.equal(summarized, "");
+});
+
+test("processMeeting transcribes a long diarized recording in one call", async () => {
+  const { id, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  const paths: string[] = [];
+  const transcribe = {
+    run: async (audioPath: string) => {
+      paths.push(audioPath);
+      return {
+        text: "A: x",
+        segments: [{ speaker: "A", start: 1, end: 2, text: "x" }],
+      };
+    },
+    ping: async () => undefined,
+  };
+  deps.transcribe = transcribe;
+  await processMeeting(deps, id);
+  assert.equal(paths.length, 1);
+  const turns = await transcripts.listByMeeting(id);
+  assert.deepEqual(turns, [{ index: 0, speaker: "A", start: 1, end: 2, text: "x" }]);
+});
+
+test("processMeeting replaces transcript chunks on a retry", async () => {
+  const { id, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  await processMeeting(deps, id);
+  await processMeeting(deps, id);
+  const hits = await transcripts.searchByEmbedding([1, 1], 10);
+  assert.equal(hits.length, 2);
 });
 
 test("processMeetingJob sets failed with the error message", async () => {
@@ -138,10 +215,63 @@ test("processMeetingJob sets failed with the error message", async () => {
   assert.equal(failed?.error, "whisper down");
 });
 
+test("processMeetingJob does not fail a meeting on a timeout when retries remain", async () => {
+  const { id, meetings, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  const timeout = new Error("Request timed out.");
+  timeout.name = "APIConnectionTimeoutError";
+  deps.transcribe = {
+    run: async () => {
+      throw timeout;
+    },
+    ping: async () => undefined,
+  };
+  await assert.rejects(() => processMeetingJob(deps, id, { lastAttempt: false }), /timed out/);
+  const row = await meetings.get(actor, id);
+  assert.equal(row?.status, "processing");
+  assert.equal(row?.error, undefined);
+});
+
+test("processMeetingJob fails a meeting on the last timeout", async () => {
+  const { id, meetings, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  const timeout = new Error("Request timed out.");
+  timeout.name = "APIConnectionTimeoutError";
+  deps.transcribe = {
+    run: async () => {
+      throw timeout;
+    },
+    ping: async () => undefined,
+  };
+  await assert.rejects(() => processMeetingJob(deps, id, { lastAttempt: true }), /timed out/);
+  const failed = await meetings.get(actor, id);
+  assert.equal(failed?.status, "failed");
+  assert.equal(failed?.error, "Request timed out.");
+});
+
 test("processMeetingJob sets failed when the blob is missing", async () => {
   const { id, meetings, deps } = await queuedJob(async () => undefined);
   await assert.rejects(() => processMeetingJob(deps, id), /video is missing/);
   const failed = await meetings.get(actor, id);
   assert.equal(failed?.status, "failed");
   assert.equal(failed?.error, "video is missing");
+});
+
+test("processMeeting logs each pipeline step", () => {
+  const source = readFileSync(new URL("./process-meeting.ts", import.meta.url), "utf8");
+  for (const step of [
+    "download blob",
+    "extract audio",
+    "transcribe",
+    "embed",
+    "save transcripts",
+    "summarize",
+    "mark ready",
+  ]) {
+    assert.match(source, new RegExp(step.replaceAll(" ", "\\s+")));
+  }
 });

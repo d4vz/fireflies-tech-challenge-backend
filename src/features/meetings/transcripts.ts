@@ -1,20 +1,34 @@
 import { MongoServerError, ObjectId, type Db, type MongoClient } from "mongodb";
+import { labeledTurnText } from "../../lib/transcribe/index.ts";
 
 export type TranscriptChunk = {
   meetingId: ObjectId;
   index: number;
+  turnIndex: number;
+  speaker: string;
+  start: number;
+  end: number;
+  turnText: string;
   text: string;
   embedding: number[];
   model: string;
 };
 
-export type PublicTranscriptChunk = {
+export type PublicTranscriptTurn = {
   index: number;
+  speaker: string;
+  start: number;
+  end: number;
   text: string;
 };
 
 export type NewTranscriptChunk = {
   index: number;
+  turnIndex: number;
+  speaker: string;
+  start: number;
+  end: number;
+  turnText: string;
   text: string;
   embedding: number[];
   model: string;
@@ -29,7 +43,8 @@ export type TranscriptChunkHit = {
 
 export type TranscriptsStore = {
   insertAll: (meetingId: string, chunks: NewTranscriptChunk[]) => Promise<void>;
-  listByMeeting: (meetingId: string) => Promise<PublicTranscriptChunk[]>;
+  replaceAll: (meetingId: string, chunks: NewTranscriptChunk[]) => Promise<void>;
+  listByMeeting: (meetingId: string) => Promise<PublicTranscriptTurn[]>;
   searchByEmbedding: (
     embedding: number[],
     limit: number,
@@ -74,6 +89,7 @@ function vectorIndexHasMeetingIdFilter(index: ListedSearchIndex): boolean {
 type VectorHit = {
   meetingId: ObjectId;
   index: number;
+  speaker: string;
   text: string;
   score: number;
 };
@@ -124,7 +140,7 @@ function toChunkHit(row: VectorHit): TranscriptChunkHit {
   return {
     meetingId: row.meetingId.toHexString(),
     index: row.index,
-    text: row.text,
+    text: labeledTurnText(row.speaker, row.text),
     score: row.score,
   };
 }
@@ -143,6 +159,35 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         chunks.map((chunk) => ({
           meetingId: id,
           index: chunk.index,
+          turnIndex: chunk.turnIndex,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
+          turnText: chunk.turnText,
+          text: chunk.text,
+          embedding: chunk.embedding,
+          model: chunk.model,
+        })),
+      );
+    },
+    replaceAll: async (meetingId, chunks) => {
+      if (!ObjectId.isValid(meetingId)) {
+        return;
+      }
+      const id = new ObjectId(meetingId);
+      await collection.deleteMany({ meetingId: id });
+      if (chunks.length === 0) {
+        return;
+      }
+      await collection.insertMany(
+        chunks.map((chunk) => ({
+          meetingId: id,
+          index: chunk.index,
+          turnIndex: chunk.turnIndex,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
+          turnText: chunk.turnText,
           text: chunk.text,
           embedding: chunk.embedding,
           model: chunk.model,
@@ -155,9 +200,25 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
       }
       return collection
         .find({ meetingId: new ObjectId(meetingId) })
-        .project<PublicTranscriptChunk>({ index: 1, text: 1, _id: 0 })
-        .sort({ index: 1 })
-        .toArray();
+        .sort({ turnIndex: 1, index: 1 })
+        .toArray()
+        .then((chunks) => {
+          const turns: PublicTranscriptTurn[] = [];
+          for (const chunk of chunks) {
+            const previous = turns.at(-1);
+            if (previous?.index === chunk.turnIndex) {
+              continue;
+            }
+            turns.push({
+              index: chunk.turnIndex,
+              speaker: chunk.speaker,
+              start: chunk.start,
+              end: chunk.end,
+              text: chunk.turnText,
+            });
+          }
+          return turns;
+        });
     },
     searchByEmbedding: async (embedding, limit, meetingIds) => {
       if (meetingIds !== undefined && meetingIds.length === 0) {
@@ -184,6 +245,7 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
             $project: {
               meetingId: 1,
               index: 1,
+              speaker: 1,
               text: 1,
               score: { $meta: "vectorSearchScore" },
             },

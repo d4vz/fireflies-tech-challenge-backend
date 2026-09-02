@@ -10,7 +10,7 @@ import type { Meeting, Meetings } from "./store.ts";
 const settings = parseSettings(`
 chunkSize: 500
 models:
-  transcribe: gpt-4o-transcribe
+  transcribe: gpt-4o-transcribe-diarize
   summary: gpt-4o-mini
   embed: text-embedding-3-small
   chat: gpt-4o-mini
@@ -86,6 +86,7 @@ function testDeps(meetings: Meetings, blobGet?: CreateAppDeps["blob"]["get"]): C
     meetings,
     transcripts: {
       insertAll: async () => unused(),
+      replaceAll: async () => unused(),
       listByMeeting: async () => [],
       searchByEmbedding: async () => [],
       ensureVectorIndex: async () => undefined,
@@ -222,6 +223,31 @@ test("GET /meetings/:id/transcripts as another user returns 404", async () => {
     headers: bearerAuth("user_b"),
   });
   assert.equal(res.status, 404);
+});
+
+test("GET /meetings/:id/transcripts returns speaker turns", async () => {
+  const meeting = sampleMeeting("keep.mp4");
+  const { meetings } = createMemoryMeetings([meeting]);
+  const deps = testDeps(meetings);
+  deps.transcripts = {
+    insertAll: async () => unused(),
+    replaceAll: async () => unused(),
+    listByMeeting: async () => [
+      { index: 0, speaker: "A", start: 0, end: 1.5, text: "hello" },
+      { index: 1, speaker: "B", start: 1.6, end: 3, text: "world" },
+    ],
+    searchByEmbedding: async () => [],
+    ensureVectorIndex: async () => undefined,
+  };
+  const app = createApp(deps);
+  const res = await app.request(`/meetings/${meeting._id.toHexString()}/transcripts`, {
+    headers: bearerAuth("user_a"),
+  });
+  assert.equal(res.status, 200);
+  assert.deepEqual(await res.json(), [
+    { index: 0, speaker: "A", start: 0, end: 1.5, text: "hello" },
+    { index: 1, speaker: "B", start: 1.6, end: 3, text: "world" },
+  ]);
 });
 
 test("GET /actions lists through listActions with hasTasks", async () => {

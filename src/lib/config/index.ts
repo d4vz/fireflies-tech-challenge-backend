@@ -34,6 +34,10 @@ const secretsSchema = z.object({
   FRONTEND_ORIGIN: z.string().min(1).optional(),
   CLERK_SECRET_KEY: z.string().min(1),
   REDIS_URL: z.string().min(1),
+  ASSEMBLYAI_API_KEY: z
+    .string()
+    .optional()
+    .transform((value) => (value === undefined || value.length === 0 ? undefined : value)),
 });
 
 export type AppSettings = z.infer<typeof settingsSchema>;
