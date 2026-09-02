@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ObjectId } from "mongodb";
+import { ownerId } from "../../lib/auth/index.ts";
 import { storeMeeting } from "./store-meeting.ts";
 import type { ClassifiedFile } from "./upload-file.ts";
 import type { Meeting, MeetingsStore } from "./store.ts";
@@ -55,6 +56,7 @@ test("storeMeeting skips thumbnail for an mp3 ClassifiedFile", async () => {
       queue: { enqueue: async () => undefined },
     },
     file,
+    { id: ownerId("user_a") },
   );
   assert.equal(thumbnailCalls, 0);
   assert.deepEqual(keys, ["meetings/6a963d4f786296c73b01d6d0/video"]);

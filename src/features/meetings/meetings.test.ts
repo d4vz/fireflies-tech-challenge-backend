@@ -14,6 +14,7 @@ function sampleMeeting(sourceId: string, userId: OwnerId): WithId<Meeting> {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     status: "ready",
     blob: {
+      kind: "video",
       url: "/v",
       durationInSeconds: 1,
       sizeInBytes: 1,
@@ -82,6 +83,7 @@ test("forActor insert stamps actor.id", async () => {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     status: "queued",
     blob: {
+      kind: "video",
       url: "/v",
       durationInSeconds: 1,
       sizeInBytes: 1,
