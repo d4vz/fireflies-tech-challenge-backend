@@ -1,6 +1,6 @@
-import { createReadStream } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import OpenAI, { toStreamingFile } from "openai";
+import OpenAI, { toFile } from "openai";
 import type { Transcribe } from "../index.ts";
 
 export function createOpenaiTranscribe(model: string): Transcribe {
@@ -8,7 +8,7 @@ export function createOpenaiTranscribe(model: string): Transcribe {
   return {
     run: async (audioPath) => {
       const transcription = await client.audio.transcriptions.create({
-        file: toStreamingFile(createReadStream(audioPath), path.basename(audioPath), {
+        file: await toFile(await readFile(audioPath), path.basename(audioPath), {
           type: "audio/mpeg",
         }),
         model,

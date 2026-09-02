@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createWriteStream } from "node:fs";
 import { mkdtemp, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { finished } from "node:stream/promises";
 import { test } from "node:test";
+import { loadSettings, settingsFileUrl } from "../../config/index.ts";
 import { createFfmpegVideo } from "./ffmpeg-video.ts";
 
 function run(command: string, args: string[]) {
@@ -20,55 +23,115 @@ function run(command: string, args: string[]) {
   });
 }
 
-test("ffmpeg reports duration and writes a jpeg thumbnail", async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
-  const videoPath = path.join(dir, "clip.mp4");
-  await run("ffmpeg", [
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    "testsrc=duration=2:size=320x240:rate=1",
-    "-pix_fmt",
-    "yuv420p",
-    videoPath,
+async function runStdoutToFile(command: string, args: string[], outputPath: string) {
+  const child = spawn(command, args);
+  const out = createWriteStream(outputPath);
+  child.stdout.pipe(out);
+  await Promise.all([
+    finished(out),
+    new Promise<void>((resolve, reject) => {
+      child.on("error", reject);
+      child.on("close", (code) => {
+        if (code === 0) {
+          resolve();
+          return;
+        }
+        reject(new Error(`${command} exited with ${code}`));
+      });
+    }),
   ]);
-  const video = createFfmpegVideo();
+}
 
-  const durationInSeconds = await video.durationInSeconds(videoPath);
-  const thumb = await video.thumbnail(videoPath);
-  const jpeg = new Uint8Array(await thumb.arrayBuffer());
-
-  assert.equal(durationInSeconds, 2);
-  assert.equal(thumb.type, "image/jpeg");
-  assert.equal(jpeg[0], 0xff);
-  assert.equal(jpeg[1], 0xd8);
-});
-
-test("ffmpeg extract writes an mp3 beside the input and returns that path", async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
-  const videoPath = path.join(dir, "clip.mp4");
+async function writeSample(dir: string) {
+  const samplePath = path.join(dir, "sample.mp4");
   await run("ffmpeg", [
     "-y",
     "-f",
     "lavfi",
     "-i",
-    "testsrc=duration=1:size=320x240:rate=1",
+    "testsrc=duration=2:size=320x240:rate=10",
     "-f",
     "lavfi",
     "-i",
-    "sine=frequency=1000:duration=1",
+    "sine=frequency=1000:duration=2",
     "-pix_fmt",
     "yuv420p",
     "-shortest",
-    videoPath,
+    samplePath,
   ]);
-  const video = createFfmpegVideo();
-  const audioPath = await video.extract(videoPath);
-  const info = await stat(audioPath);
+  return samplePath;
+}
 
-  assert.equal(audioPath, path.join(dir, "audio.mp3"));
-  assert.ok(info.size > 0);
+async function convertSample(samplePath: string, destPath: string) {
+  const ext = path.extname(destPath).slice(1);
+  if (ext === "webm") {
+    await run("ffmpeg", [
+      "-y",
+      "-i",
+      samplePath,
+      "-c:v",
+      "libvpx",
+      "-deadline",
+      "realtime",
+      "-c:a",
+      "libvorbis",
+      destPath,
+    ]);
+    return;
+  }
+  await run("ffmpeg", ["-y", "-i", samplePath, "-c", "copy", destPath]);
+}
+
+const settings = await loadSettings(settingsFileUrl);
+
+for (const ext of settings.upload.extensions) {
+  test(`ffmpeg reports duration, thumbnail, and audio for .${ext}`, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+    const samplePath = await writeSample(dir);
+    const videoPath = path.join(dir, `clip.${ext}`);
+    await convertSample(samplePath, videoPath);
+    const video = createFfmpegVideo();
+
+    const durationInSeconds = await video.durationInSeconds(videoPath);
+    const thumb = await video.thumbnail(videoPath);
+    const jpeg = new Uint8Array(await thumb.arrayBuffer());
+    const audioPath = await video.extract(videoPath);
+    const info = await stat(audioPath);
+
+    assert.equal(durationInSeconds, 2);
+    assert.equal(thumb.type, "image/jpeg");
+    assert.equal(jpeg[0], 0xff);
+    assert.equal(jpeg[1], 0xd8);
+    assert.equal(audioPath, path.join(dir, "audio.mp3"));
+    assert.ok(info.size > 0);
+  });
+}
+
+test("ffmpeg reports duration for a webm with no format duration", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+  const videoPath = path.join(dir, "piped.webm");
+  await runStdoutToFile(
+    "ffmpeg",
+    [
+      "-f",
+      "lavfi",
+      "-i",
+      "testsrc=duration=2:size=320x240:rate=10",
+      "-c:v",
+      "libvpx",
+      "-deadline",
+      "realtime",
+      "-f",
+      "webm",
+      "pipe:1",
+    ],
+    videoPath,
+  );
+  const video = createFfmpegVideo();
+
+  const durationInSeconds = await video.durationInSeconds(videoPath);
+
+  assert.equal(durationInSeconds, 2);
 });
 
 test("ffmpeg extract fails with the ffmpeg message when the clip has no audio", async () => {
