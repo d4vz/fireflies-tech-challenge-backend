@@ -33,12 +33,10 @@ jobs:
           bump() {
             git pull --rebase origin main
             current=$(git rev-parse "HEAD:${SUBMODULE_PATH}")
-            if [ "$current" = "$SHA" ]; then
-              echo "Parent already points at ${SHA}"
-              return 0
+            if [ "$current" != "$SHA" ]; then
+              git update-index --cacheinfo "160000,${SHA},${SUBMODULE_PATH}"
+              git commit -m "chore: bump ${SUBMODULE_PATH} to ${SHA:0:7}"
             fi
-            git update-index --cacheinfo "160000,${SHA},${SUBMODULE_PATH}"
-            git commit -m "chore: bump ${SUBMODULE_PATH} to ${SHA:0:7}"
             git push origin HEAD:main
           }
 
