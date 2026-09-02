@@ -18,31 +18,19 @@ function bearerToken(authorizationHeader: string | undefined): string | undefine
   return token;
 }
 
-async function verifiedPayload(token: string, secretKey: string, frontendOrigin?: string) {
-  try {
-    if (frontendOrigin === undefined) {
-      return await verifyToken(token, { secretKey });
-    }
-    return await verifyToken(token, { secretKey, authorizedParties: [frontendOrigin] });
-  } catch {
-    throw new AuthError();
-  }
-}
-
-export function createClerkAuthVerify(secretKey: string, frontendOrigin?: string): AuthVerify {
+export function createClerkAuthVerify(secretKey: string): AuthVerify {
   return {
     verifyBearer: async (authorizationHeader) => {
       const token = bearerToken(authorizationHeader);
       if (token === undefined) {
         throw new AuthError();
       }
-      const parsed = clerkSessionSchema.safeParse(
-        await verifiedPayload(token, secretKey, frontendOrigin),
-      );
-      if (!parsed.success) {
+      try {
+        const payload = clerkSessionSchema.parse(await verifyToken(token, { secretKey }));
+        return { id: ownerId(payload.sub) };
+      } catch {
         throw new AuthError();
       }
-      return { id: ownerId(parsed.data.sub) };
     },
   };
 }

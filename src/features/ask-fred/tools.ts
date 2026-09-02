@@ -1,14 +1,26 @@
-import { tool } from "ai";
+import { tool, type LanguageModel } from "ai";
 import type { WithId } from "mongodb";
 import { z } from "zod";
-import { meetingListQuerySchema, type MeetingListPage } from "../meetings/list-query.ts";
+import {
+  meetingListQuerySchema,
+  type MeetingListPage,
+  type MeetingListQuery,
+} from "../meetings/list-query.ts";
 import {
   meetingTranscriptSearchQuerySchema,
   transcriptSearchQuerySchema,
+  type MeetingTranscriptSearchQuery,
   type TranscriptHit,
+  type TranscriptSearchQuery,
 } from "../meetings/search.ts";
 import type { Meeting } from "../meetings/store.ts";
-import type { AskFredDeps } from "./http.ts";
+
+export type AskFredDeps = {
+  model: LanguageModel;
+  listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
+  searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
+  searchMeetingTranscripts: (query: MeetingTranscriptSearchQuery) => Promise<TranscriptHit[]>;
+};
 
 function meetingHref(id: string) {
   return `/meetings/${id}`;

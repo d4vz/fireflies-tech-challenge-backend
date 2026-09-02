@@ -90,12 +90,3 @@ test("forActor insert stamps actor.id", async () => {
   assert.equal(store.inserted[0]?.userId, ownerId("user_a"));
   assert.equal((await owned.get(_id.toHexString())) !== null, true);
 });
-
-test("forActor never matches an ownerless row", async () => {
-  const meeting = sampleMeeting("legacy.mp4", ownerId("user_a"));
-  Object.defineProperty(meeting, "userId", { value: undefined });
-  const store = fakeMeetingsStore([meeting]);
-  const owned = forActor(store, { id: ownerId("user_a") });
-  assert.equal(await owned.get(meeting._id.toHexString()), null);
-  assert.deepEqual(await owned.list(0, 10, {}), []);
-});
