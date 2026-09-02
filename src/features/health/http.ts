@@ -1,4 +1,4 @@
-import type { Hono } from "hono";
+import type { Env, Hono } from "hono";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { Transcribe } from "../../lib/transcribe/index.ts";
 
@@ -22,7 +22,7 @@ async function pingService(ping: () => Promise<void>): Promise<PingResult> {
   }
 }
 
-export function mountHealth(app: Hono, deps: HealthDeps) {
+export function mountHealth<E extends Env>(app: Hono<E>, deps: HealthDeps) {
   app.get("/health", async (c) => {
     const [blob, transcribe] = await Promise.all([
       pingService(() => deps.blob.ping()),

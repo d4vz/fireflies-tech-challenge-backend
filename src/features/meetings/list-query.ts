@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { OwnerId } from "../../lib/auth/index.ts";
 import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
 import type { WithId } from "mongodb";
 
@@ -16,6 +17,7 @@ export type MeetingFilter = {
   to?: Date;
   status?: MeetingStatus;
   sourceId?: string;
+  userId?: OwnerId;
 };
 
 export type MeetingListPage = {
@@ -60,7 +62,7 @@ export function skipOf(query: MeetingListQuery): number {
 }
 
 export async function listMeetings(
-  store: MeetingsStore,
+  store: Pick<MeetingsStore, "list" | "count">,
   query: MeetingListQuery,
 ): Promise<MeetingListPage> {
   const filter = meetingFilter(query);

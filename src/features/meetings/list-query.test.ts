@@ -11,6 +11,7 @@ import {
   type MeetingListQuery,
 } from "./list-query.ts";
 import type { Meeting, MeetingStatus, MeetingsStore } from "./store.ts";
+import { ownerId } from "../../lib/auth/index.ts";
 
 test("meetingListQuerySchema defaults page to 1 and limit to 10", () => {
   const query = meetingListQuerySchema.parse({});
@@ -74,6 +75,7 @@ function sampleMeeting(input: {
 }): WithId<Meeting> {
   return {
     _id: new ObjectId(),
+    userId: ownerId("user_a"),
     sourceType: "upload",
     sourceId: input.sourceId ?? "interview.mp4",
     createdAt: input.createdAt,

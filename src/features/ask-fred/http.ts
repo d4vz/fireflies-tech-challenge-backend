@@ -11,23 +11,17 @@ import {
 } from "ai";
 import type { Hono } from "hono";
 import { z } from "zod";
-import type { MeetingListPage, MeetingListQuery } from "../meetings/list-query.ts";
-import type {
-  MeetingTranscriptSearchQuery,
-  TranscriptHit,
-  TranscriptSearchQuery,
-} from "../meetings/search.ts";
+import type { Actor } from "../../lib/auth/index.ts";
+import type { AppEnv } from "../../lib/middleware/index.ts";
 import { askFredSystemPrompt, parseAskFredOrigin } from "./prompt.ts";
 import { createAskFredTools } from "./tools.ts";
 
 export const ASK_FRED_REASONING_EFFORT = "medium";
 
-export type AskFredDeps = {
+export type AskFredHttpDeps = {
   model: LanguageModel;
-  listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
-  searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
-  searchMeetingTranscripts: (query: MeetingTranscriptSearchQuery) => Promise<TranscriptHit[]>;
   origin?: string;
+  toolsFor: (actor: Actor) => ReturnType<typeof createAskFredTools>;
 };
 
 export type AskFredRequest = {
@@ -45,7 +39,7 @@ export async function readAskFredMessages(input: unknown): Promise<AskFredReques
   return { messages: await validateUIMessages({ messages: body.messages }) };
 }
 
-export function mountAskFred(app: Hono, deps: AskFredDeps): void {
+export function mountAskFred(app: Hono<AppEnv>, deps: AskFredHttpDeps): void {
   app.post("/ask-fred", async (c) => {
     let request: AskFredRequest;
     try {
@@ -62,7 +56,7 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
       model: deps.model,
       system: askFredSystemPrompt(new Date(), origin),
       messages: await convertToModelMessages(request.messages),
-      tools: createAskFredTools(deps),
+      tools: deps.toolsFor(c.get("actor")),
       stopWhen: stepCountIs(5),
       maxOutputTokens: 8192,
       abortSignal,

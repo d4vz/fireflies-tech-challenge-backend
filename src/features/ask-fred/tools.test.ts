@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ObjectId } from "mongodb";
 import { z } from "zod";
+import { ownerId } from "../../lib/auth/index.ts";
 import { createAskFredTools, listMeetingsToolSchema } from "./tools.ts";
 import type { MeetingListQuery } from "../meetings/list-query.ts";
 import {
@@ -149,6 +150,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
       items: [
         {
           _id: new ObjectId("6a963d4f786296c73b01d6d0"),
+          userId: ownerId("user_a"),
           sourceType: "upload",
           sourceId: "screen-recording.webm",
           createdAt: new Date("2026-09-01T03:33:00.000Z"),

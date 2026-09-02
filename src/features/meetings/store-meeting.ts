@@ -1,4 +1,5 @@
 import { createReadStream } from "node:fs";
+import type { Actor } from "../../lib/auth/index.ts";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
@@ -32,7 +33,7 @@ async function storeThumbnail(
   });
 }
 
-export async function storeMeeting(deps: StoreMeetingDeps, file: ClassifiedFile) {
+export async function storeMeeting(deps: StoreMeetingDeps, file: ClassifiedFile, actor: Actor) {
   const { video, blob, meetings, queue } = deps;
   const _id = meetings.createId();
   const id = _id.toHexString();
@@ -81,6 +82,7 @@ export async function storeMeeting(deps: StoreMeetingDeps, file: ClassifiedFile)
 
   const meeting = {
     _id,
+    userId: actor.id,
     sourceType: "upload" as const,
     sourceId: file.name || "video",
     createdAt: new Date(),
