@@ -17,14 +17,28 @@ test("listMeetings tool schema is JSON Schema representable", () => {
   assert.doesNotThrow(() => z.toJSONSchema(listMeetingsToolSchema));
 });
 
-test("listMeetings tool schema rejects sourceId slash", () => {
-  assert.throws(() =>
-    listMeetingsToolSchema.parse({
-      page: 1,
-      limit: 10,
-      sourceId: "/",
-    }),
-  );
+test("listMeetings execute does not take sourceId", async () => {
+  const seen: MeetingListQuery[] = [];
+  const tools = createAskFredTools({
+    model: "openai/gpt-4o-mini",
+    listMeetings: async (query) => {
+      seen.push(query);
+      return { items: [], total: 0, page: query.page, limit: query.limit };
+    },
+    searchTranscripts: async () => {
+      throw new Error("unused");
+    },
+  });
+  const execute = tools.listMeetings.execute;
+  assert.ok(execute);
+  const input = {
+    page: 1,
+    limit: 10,
+    sourceId: "not-used",
+  };
+  await execute(input, executeOptions);
+  assert.equal(seen.length, 1);
+  assert.equal(seen[0]?.sourceId, undefined);
 });
 
 test("listMeetings tool execute maps ISO datetimes onto MeetingListQuery dates", async () => {

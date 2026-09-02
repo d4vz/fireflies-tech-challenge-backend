@@ -15,4 +15,7 @@ test("askFredSystemPrompt tells Fred to link meetings with the tool href", () =>
   assert.match(prompt, /\/meetings\/\{id\}/);
   assert.match(prompt, /short date/);
   assert.match(prompt, /your_workspace_url/);
+  assert.match(prompt, /https:\/\/meetings\//);
+  assert.match(prompt, /Skip filler/);
+  assert.doesNotMatch(prompt, /You are Fred, an assistant/);
 });

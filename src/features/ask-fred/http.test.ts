@@ -4,6 +4,7 @@ import { ObjectId } from "mongodb";
 import { createApp, type CreateAppDeps } from "../../create-app.ts";
 import { parseSettings } from "../../lib/config/index.ts";
 import type { MeetingsStore } from "../meetings/store.ts";
+import { ASK_FRED_REASONING_EFFORT } from "./http.ts";
 
 const settings = parseSettings(`
 chunkSize: 500
@@ -56,6 +57,10 @@ function testDeps(): CreateAppDeps {
     model: "openai/gpt-4o-mini",
   };
 }
+
+test("AskFred uses medium reasoning", () => {
+  assert.equal(ASK_FRED_REASONING_EFFORT, "medium");
+});
 
 test("POST /ask-fred returns 400 for an invalid body", async () => {
   const app = createApp(testDeps());

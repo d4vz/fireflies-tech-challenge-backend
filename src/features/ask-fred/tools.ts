@@ -66,11 +66,6 @@ export const listMeetingsToolSchema = z
     from: z.iso.datetime().optional(),
     to: z.iso.datetime().optional(),
     status: z.enum(["queued", "processing", "ready", "failed"]).optional(),
-    sourceId: z
-      .string()
-      .min(1)
-      .refine((id) => id !== "/", { message: "sourceId must be a file name" })
-      .optional(),
   })
   .refine((query) => query.from === undefined || query.to === undefined || query.from < query.to, {
     message: "from must be before to",
@@ -81,18 +76,20 @@ export function createAskFredTools(deps: AskFredDeps) {
     listMeetings: tool({
       description: [
         "List workspace meetings. Meetings have no title; identify them by sourceId, status, createdAt, and summary.",
-        "Filter on createdAt range, status (queued | processing | ready | failed), and sourceId.",
+        "Filter on createdAt range and status (queued | processing | ready | failed).",
         "Use the UTC today range from the system prompt. Do not invent a year.",
-        "Only set sourceId when the user named a recording file.",
         "Examples:",
         "- 'What's my day looking like?' → from=start of today, to=start of tomorrow (`to` is exclusive).",
         "- 'what is queued?' → status=queued.",
         "- 'Pending tasks across all meetings' → list ready meetings and read summary.actionItems.",
-        "- 'meetings from interview.mp4' → sourceId=interview.mp4.",
       ].join(" "),
       inputSchema: listMeetingsToolSchema,
       execute: async (query) =>
-        toAskFredMeetingPage(await deps.listMeetings(meetingListQuerySchema.parse(query))),
+        toAskFredMeetingPage(
+          await deps.listMeetings(
+            meetingListQuerySchema.parse(listMeetingsToolSchema.parse(query)),
+          ),
+        ),
     }),
     searchTranscripts: tool({
       description: [

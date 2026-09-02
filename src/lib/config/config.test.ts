@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseSecrets, parseSettings } from "./index.ts";
+import { loadSettings, parseSecrets, parseSettings, settingsFileUrl } from "./index.ts";
 
 const yaml = `
 chunkSize: 500
@@ -23,6 +23,11 @@ test("parseSettings reads models, chunk size, and upload limits from yaml", () =
   assert.equal(settings.models.summary, "gpt-4o-mini");
   assert.equal(settings.models.chat, "gpt-4o-mini");
   assert.equal(settings.upload.maxFileBytes, 5368709120);
+});
+
+test("AskFred chat model is gpt-5.1", async () => {
+  const settings = await loadSettings(settingsFileUrl);
+  assert.equal(settings.models.chat, "gpt-5.1");
 });
 
 test("parseSettings rejects yaml that is missing models", () => {
