@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1540 160" width="1540" height="160">
+  <rect width="1540" height="160" fill="#121212"/>
+  <g fill="none" stroke="#d3d3d3" stroke-width="2">
+    <rect x="16" y="40" width="220" height="80" rx="2"/>
+    <path d="M286 80 l50 -40 l50 40 l-50 40 z"/>
+    <rect x="420" y="88" width="200" height="52" rx="2"/>
+    <rect x="700" y="54" width="200" height="52" rx="2"/>
+    <rect x="980" y="40" width="250" height="80" rx="2"/>
+    <rect x="1310" y="54" width="210" height="52" rx="2"/>
+    <path d="M236 80 H286" marker-end="url(#arrow)"/>
+    <path d="M336 120 H420" marker-end="url(#arrow)"/>
+    <path d="M386 50 H800 V54" marker-end="url(#arrow)"/>
+    <path d="M620 114 H700 V106" marker-end="url(#arrow)"/>
+    <path d="M900 80 H980" marker-end="url(#arrow)"/>
+    <path d="M1230 80 H1310" marker-end="url(#arrow)"/>
+  </g>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#d3d3d3"/>
+    </marker>
+  </defs>
+  <g fill="#d3d3d3" font-family="ui-sans-serif, system-ui, sans-serif" text-anchor="middle">
+    <text x="126" y="86" font-size="16">POST /meetings/upload</text>
+    <text x="336" y="86" font-size="16">Video?</text>
+    <text x="378" y="42" font-size="13">no</text>
+    <text x="372" y="138" font-size="13">yes</text>
+    <text x="520" y="120" font-size="16">Extract thumbnail</text>
+    <text x="800" y="86" font-size="16">Save file in MinIO</text>
+    <text x="1105" y="74" font-size="16">Save meeting in MongoDB</text>
+    <text x="1105" y="96" font-size="16">as queued</text>
+    <text x="1415" y="86" font-size="16">Push to queue</text>
+  </g>
+</svg>
