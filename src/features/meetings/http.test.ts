@@ -74,7 +74,6 @@ function testDeps(meetings: Meetings, blobGet?: CreateAppDeps["blob"]["get"]): C
   return {
     video: {
       extract: async () => unused(),
-      slice: async () => unused(),
       durationInSeconds: async () => unused(),
       thumbnail: async () => unused(),
     },
@@ -87,6 +86,7 @@ function testDeps(meetings: Meetings, blobGet?: CreateAppDeps["blob"]["get"]): C
     meetings,
     transcripts: {
       insertAll: async () => unused(),
+      replaceAll: async () => unused(),
       listByMeeting: async () => [],
       searchByEmbedding: async () => [],
       ensureVectorIndex: async () => undefined,
@@ -231,6 +231,7 @@ test("GET /meetings/:id/transcripts returns speaker turns", async () => {
   const deps = testDeps(meetings);
   deps.transcripts = {
     insertAll: async () => unused(),
+    replaceAll: async () => unused(),
     listByMeeting: async () => [
       { index: 0, speaker: "A", start: 0, end: 1.5, text: "hello" },
       { index: 1, speaker: "B", start: 1.6, end: 3, text: "world" },

@@ -10,9 +10,11 @@ import type {
 type StoredChunk = {
   meetingId: string;
   index: number;
+  turnIndex: number;
   speaker: string;
   start: number;
   end: number;
+  turnText: string;
   text: string;
   embedding: number[];
 };
@@ -54,9 +56,31 @@ export function createMemoryTranscripts(): TranscriptsStore {
         rows.push({
           meetingId,
           index: chunk.index,
+          turnIndex: chunk.turnIndex,
           speaker: chunk.speaker,
           start: chunk.start,
           end: chunk.end,
+          turnText: chunk.turnText,
+          text: chunk.text,
+          embedding: chunk.embedding,
+        });
+      }
+    },
+    replaceAll: async (meetingId, chunks: NewTranscriptChunk[]) => {
+      if (!ObjectId.isValid(meetingId)) {
+        return;
+      }
+      const existing = rows.filter((chunk) => chunk.meetingId !== meetingId);
+      rows.splice(0, rows.length, ...existing);
+      for (const chunk of chunks) {
+        rows.push({
+          meetingId,
+          index: chunk.index,
+          turnIndex: chunk.turnIndex,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
+          turnText: chunk.turnText,
           text: chunk.text,
           embedding: chunk.embedding,
         });
@@ -65,13 +89,16 @@ export function createMemoryTranscripts(): TranscriptsStore {
     listByMeeting: async (meetingId): Promise<PublicTranscriptTurn[]> => {
       return rows
         .filter((chunk) => chunk.meetingId === meetingId)
-        .sort((left, right) => left.index - right.index)
+        .sort((left, right) => left.turnIndex - right.turnIndex || left.index - right.index)
+        .filter(
+          (chunk, index, chunks) => index === 0 || chunks[index - 1]?.turnIndex !== chunk.turnIndex,
+        )
         .map((chunk) => ({
-          index: chunk.index,
+          index: chunk.turnIndex,
           speaker: chunk.speaker,
           start: chunk.start,
           end: chunk.end,
-          text: chunk.text,
+          text: chunk.turnText,
         }));
     },
     searchByEmbedding: async (embedding, limit, meetingIds): Promise<TranscriptChunkHit[]> => {

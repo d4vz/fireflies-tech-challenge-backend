@@ -40,7 +40,17 @@ async function seedChunk(
   embedding: number[],
 ) {
   await transcripts.insertAll(meetingId, [
-    { index, speaker: "A", start: 0, end: 1, text, embedding, model: "test-embed" },
+    {
+      index,
+      turnIndex: index,
+      speaker: "A",
+      start: 0,
+      end: 1,
+      turnText: text,
+      text,
+      embedding,
+      model: "test-embed",
+    },
   ]);
 }
 

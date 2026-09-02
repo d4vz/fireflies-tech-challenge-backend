@@ -13,7 +13,6 @@ export type Transcript = {
 export type Transcribe = {
   run: (audioPath: string) => Promise<Transcript>;
   ping: () => Promise<void>;
-  windowSeconds?: number;
 };
 
 export function labeledTurnText(speaker: string, text: string) {

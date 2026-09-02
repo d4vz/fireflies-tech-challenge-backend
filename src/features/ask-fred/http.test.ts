@@ -52,7 +52,6 @@ function testDeps(): CreateAppDeps {
   return {
     video: {
       extract: async () => unused(),
-      slice: async () => unused(),
       durationInSeconds: async () => unused(),
       thumbnail: async () => unused(),
     },
@@ -61,6 +60,7 @@ function testDeps(): CreateAppDeps {
     meetings,
     transcripts: {
       insertAll: async () => unused(),
+      replaceAll: async () => unused(),
       listByMeeting: async () => [],
       searchByEmbedding: async () => [],
       ensureVectorIndex: async () => undefined,

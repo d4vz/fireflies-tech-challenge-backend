@@ -76,7 +76,6 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
   const deps: ProcessMeetingDeps = {
     video: {
       extract: async (inputPath) => inputPath,
-      slice: async () => unused(),
       durationInSeconds: async () => 1,
       thumbnail: async () => unused(),
     },
@@ -110,7 +109,7 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
   return { id: row._id.toHexString(), store, meetings, transcripts, deps };
 }
 
-test("processMeeting marks ready with chunks and tasks", async () => {
+test("processMeeting marks ready with turns and tasks", async () => {
   const { id, meetings, transcripts, deps } = await queuedJob(async () => ({
     body: bytesStream(new Uint8Array([1, 2, 3])),
     contentType: "video/mp4",
@@ -133,12 +132,8 @@ test("processMeeting marks ready with chunks and tasks", async () => {
   assert.equal(ready?.tasks?.length, 1);
   assert.equal(ready?.tasks?.[0]?.text, "review notes");
   assert.equal(summarized, "A: abcdefghij");
-  const chunks = await transcripts.listByMeeting(id);
-  assert.equal(chunks.length, 2);
-  assert.deepEqual(chunks, [
-    { index: 0, speaker: "A", start: 0, end: 2, text: "abcde" },
-    { index: 1, speaker: "A", start: 0, end: 2, text: "fghij" },
-  ]);
+  const turns = await transcripts.listByMeeting(id);
+  assert.deepEqual(turns, [{ index: 0, speaker: "A", start: 0, end: 2, text: "abcdefghij" }]);
 });
 
 test("processMeeting stays ready with no chunks when segments are empty", async () => {
@@ -169,21 +164,14 @@ test("processMeeting stays ready with no chunks when segments are empty", async 
   assert.equal(summarized, "");
 });
 
-test("processMeeting transcribes each 2-minute window", async () => {
+test("processMeeting transcribes a long diarized recording in one call", async () => {
   const { id, transcripts, deps } = await queuedJob(async () => ({
     body: bytesStream(new Uint8Array([1, 2, 3])),
     contentType: "video/mp4",
   }));
-  deps.video.durationInSeconds = async () => 240;
-  const slices: { start: number; duration: number }[] = [];
-  deps.video.slice = async (_audioPath, start, duration) => {
-    slices.push({ start, duration });
-    return `slice-${start}`;
-  };
   const paths: string[] = [];
-  deps.transcribe = {
-    windowSeconds: 120,
-    run: async (audioPath) => {
+  const transcribe = {
+    run: async (audioPath: string) => {
       paths.push(audioPath);
       return {
         text: "A: x",
@@ -192,49 +180,22 @@ test("processMeeting transcribes each 2-minute window", async () => {
     },
     ping: async () => undefined,
   };
+  deps.transcribe = transcribe;
   await processMeeting(deps, id);
-  assert.deepEqual(slices, [
-    { start: 0, duration: 120 },
-    { start: 120, duration: 120 },
-  ]);
-  assert.deepEqual(paths, ["slice-0", "slice-120"]);
-  const chunks = await transcripts.listByMeeting(id);
-  assert.deepEqual(
-    chunks.map((chunk) => ({ start: chunk.start, end: chunk.end, text: chunk.text })),
-    [
-      { start: 1, end: 2, text: "x" },
-      { start: 121, end: 122, text: "x" },
-    ],
-  );
+  assert.equal(paths.length, 1);
+  const turns = await transcripts.listByMeeting(id);
+  assert.deepEqual(turns, [{ index: 0, speaker: "A", start: 1, end: 2, text: "x" }]);
 });
 
-test("processMeeting transcribes a long file in one call when windows are off", async () => {
+test("processMeeting replaces transcript chunks on a retry", async () => {
   const { id, transcripts, deps } = await queuedJob(async () => ({
     body: bytesStream(new Uint8Array([1, 2, 3])),
     contentType: "video/mp4",
   }));
-  deps.video.durationInSeconds = async () => 240;
-  const slices: number[] = [];
-  deps.video.slice = async (_audioPath, start) => {
-    slices.push(start);
-    return `slice-${start}`;
-  };
-  const paths: string[] = [];
-  deps.transcribe = {
-    run: async (audioPath) => {
-      paths.push(audioPath);
-      return {
-        text: "A: x",
-        segments: [{ speaker: "A", start: 1, end: 2, text: "x" }],
-      };
-    },
-    ping: async () => undefined,
-  };
   await processMeeting(deps, id);
-  assert.deepEqual(slices, []);
-  assert.equal(paths.length, 1);
-  const chunks = await transcripts.listByMeeting(id);
-  assert.equal(chunks[0]?.start, 1);
+  await processMeeting(deps, id);
+  const hits = await transcripts.searchByEmbedding([1, 1], 10);
+  assert.equal(hits.length, 2);
 });
 
 test("processMeetingJob sets failed with the error message", async () => {

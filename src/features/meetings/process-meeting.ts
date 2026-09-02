@@ -22,50 +22,6 @@ export type ProcessMeetingDeps = {
   settings: AppSettings;
 };
 
-export function transcribeWindows(
-  durationSeconds: number,
-  windowSeconds?: number,
-): { start: number; duration: number }[] {
-  if (windowSeconds === undefined || durationSeconds <= 0 || durationSeconds <= windowSeconds) {
-    return [{ start: 0, duration: Math.max(durationSeconds, 0) }];
-  }
-  const windows: { start: number; duration: number }[] = [];
-  let start = 0;
-  while (start < durationSeconds) {
-    windows.push({
-      start,
-      duration: Math.min(windowSeconds, durationSeconds - start),
-    });
-    start += windowSeconds;
-  }
-  return windows;
-}
-
-export function shiftTranscript(transcript: Transcript, offsetSeconds: number): Transcript {
-  if (offsetSeconds === 0) {
-    return transcript;
-  }
-  return {
-    text: transcript.text,
-    segments: transcript.segments.map((segment) => ({
-      ...segment,
-      start: segment.start + offsetSeconds,
-      end: segment.end + offsetSeconds,
-    })),
-  };
-}
-
-export function joinTranscripts(parts: Transcript[]): Transcript {
-  const segments = parts.flatMap((part) => part.segments);
-  return {
-    text: parts
-      .map((part) => part.text)
-      .filter((text) => text.length > 0)
-      .join("\n"),
-    segments,
-  };
-}
-
 export function chunkText(text: string, size: number) {
   if (text.length === 0) {
     return [];
@@ -91,49 +47,12 @@ export function chunkText(text: string, size: number) {
   return chunks;
 }
 
-export function rowsFromTranscript(
-  transcript: Transcript,
-  chunkSize: number,
-): PublicTranscriptTurn[] {
-  const rows: PublicTranscriptTurn[] = [];
-  let index = 0;
-  for (const segment of transcript.segments) {
-    for (const text of chunkText(segment.text, chunkSize)) {
-      rows.push({
-        index,
-        speaker: segment.speaker,
-        start: segment.start,
-        end: segment.end,
-        text,
-      });
-      index += 1;
-    }
-  }
-  return rows;
+export function turnsFromTranscript(transcript: Transcript): PublicTranscriptTurn[] {
+  return transcript.segments.map((segment, index) => ({ ...segment, index }));
 }
 
 function logMeeting(meetingId: string, message: string) {
   console.log(`[meeting ${meetingId}] ${message}`);
-}
-
-async function transcribeWindowsOf(
-  meetingId: string,
-  transcribe: Transcribe,
-  video: Video,
-  audioPath: string,
-  windows: { start: number; duration: number }[],
-): Promise<Transcript> {
-  if (windows.length <= 1) {
-    return transcribe.run(audioPath);
-  }
-  const parts: Transcript[] = [];
-  for (const [index, window] of windows.entries()) {
-    logMeeting(meetingId, `transcribe window ${index + 1}/${windows.length} at ${window.start}s`);
-    const slicePath = await video.slice(audioPath, window.start, window.duration);
-    const part = await transcribe.run(slicePath);
-    parts.push(shiftTranscript(part, window.start));
-  }
-  return joinTranscripts(parts);
 }
 
 async function meetingStep<T>(meetingId: string, step: string, run: () => Promise<T>): Promise<T> {
@@ -166,30 +85,30 @@ export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string
     const audioPath = await meetingStep(meetingId, "extract audio", () => video.extract(temp.path));
     const audioBytes = (await stat(audioPath)).size;
     logMeeting(meetingId, `audio ${audioBytes} bytes`);
-    const duration = await video.durationInSeconds(audioPath);
-    const windows = transcribeWindows(duration, transcribe.windowSeconds);
-    logMeeting(meetingId, `audio ${duration}s ${windows.length} window(s)`);
-    const transcript = await meetingStep(meetingId, "transcribe", () =>
-      transcribeWindowsOf(meetingId, transcribe, video, audioPath, windows),
+    const transcript = await meetingStep(meetingId, "transcribe", () => transcribe.run(audioPath));
+    const turns = turnsFromTranscript(transcript);
+    logMeeting(meetingId, `turns ${turns.length}`);
+    const chunks = turns.flatMap((turn) =>
+      chunkText(turn.text, settings.chunkSize).map((text) => ({ turn, text })),
     );
-    const rows = rowsFromTranscript(transcript, settings.chunkSize);
-    logMeeting(meetingId, `turns ${rows.length}`);
-    const labeled = rows.map((row) => labeledTurnText(row.speaker, row.text));
+    const labeled = chunks.map((chunk) => labeledTurnText(chunk.turn.speaker, chunk.text));
     const embeddings = await meetingStep(meetingId, "embed", () => embed.run(labeled));
-    if (embeddings.length !== rows.length) {
+    if (embeddings.length !== chunks.length) {
       throw new Error("embed count mismatch");
     }
-    const chunks: NewTranscriptChunk[] = rows.map((row, index) => ({
-      index: row.index,
-      speaker: row.speaker,
-      start: row.start,
-      end: row.end,
-      text: row.text,
+    const storedChunks: NewTranscriptChunk[] = chunks.map((chunk, index) => ({
+      index,
+      turnIndex: chunk.turn.index,
+      speaker: chunk.turn.speaker,
+      start: chunk.turn.start,
+      end: chunk.turn.end,
+      turnText: chunk.turn.text,
+      text: chunk.text,
       embedding: embeddings[index],
       model: embed.model,
     }));
     await meetingStep(meetingId, "save transcripts", () =>
-      transcripts.insertAll(meetingId, chunks),
+      transcripts.replaceAll(meetingId, storedChunks),
     );
     const summary = await meetingStep(meetingId, "summarize", () => summarize.run(transcript.text));
     const tasks = tasksFromActionItems(summary.actionItems, meetings.createId, new Date());

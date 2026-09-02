@@ -220,25 +220,6 @@ for (const ext of settings.upload.audio.extensions) {
   });
 }
 
-test("ffmpeg slice cuts a window from extracted audio", async () => {
-  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
-  const source = path.join(dir, "full.mp3");
-  await run("ffmpeg", [
-    "-y",
-    "-f",
-    "lavfi",
-    "-i",
-    "sine=frequency=1000:duration=3",
-    "-q:a",
-    "4",
-    source,
-  ]);
-  const video = createFfmpegVideo();
-  const slicePath = await video.slice(source, 1, 1);
-  assert.equal(slicePath, path.join(dir, "audio-1.mp3"));
-  assert.equal(await video.durationInSeconds(slicePath), 1);
-});
-
 test("ffmpeg reports duration for a webm with no format duration", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
   const videoPath = path.join(dir, "piped.webm");
