@@ -16,6 +16,8 @@ import type { TranscriptHit, TranscriptSearchQuery } from "../meetings/search.ts
 import { askFredSystemPrompt } from "./prompt.ts";
 import { createAskFredTools } from "./tools.ts";
 
+export const ASK_FRED_REASONING_EFFORT = "medium";
+
 export type AskFredDeps = {
   model: LanguageModel;
   listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
@@ -54,6 +56,9 @@ export function mountAskFred(app: Hono, deps: AskFredDeps): void {
       stopWhen: stepCountIs(5),
       maxOutputTokens: 8192,
       abortSignal,
+      providerOptions: {
+        openai: { reasoningEffort: ASK_FRED_REASONING_EFFORT },
+      },
     });
     return createUIMessageStreamResponse({
       stream: toUIMessageStream({ stream: result.stream }),
