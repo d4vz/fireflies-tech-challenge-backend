@@ -11,8 +11,14 @@ const settingsSchema = z.object({
   }),
   upload: z.object({
     maxFileBytes: z.number().int().positive(),
-    mimeTypes: z.array(z.string().min(1)).min(1),
-    extensions: z.array(z.string().min(1)).min(1),
+    video: z.object({
+      mimeTypes: z.array(z.string().min(1)).min(1),
+      extensions: z.array(z.string().min(1)).min(1),
+    }),
+    audio: z.object({
+      mimeTypes: z.array(z.string().min(1)).min(1),
+      extensions: z.array(z.string().min(1)).min(1),
+    }),
   }),
 });
 

@@ -79,6 +79,7 @@ function sampleMeeting(input: {
     createdAt: input.createdAt,
     status: input.status ?? "ready",
     blob: {
+      kind: "video",
       url: "/v",
       durationInSeconds: 1,
       sizeInBytes: 1,

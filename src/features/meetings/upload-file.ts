@@ -4,6 +4,7 @@ import { mkdtemp, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import type { AppSettings } from "../../lib/config/index.ts";
+import type { MeetingMediaKind } from "./store.ts";
 
 export type SavedFile = {
   name: string;
@@ -11,6 +12,8 @@ export type SavedFile = {
   size: number;
   path: string;
 };
+
+export type ClassifiedFile = SavedFile & { kind: MeetingMediaKind };
 
 function closeNothing() {
   return Promise.resolve();
@@ -65,11 +68,23 @@ function fileExtension(name: string) {
   return name.slice(index + 1).toLowerCase();
 }
 
-export function isAllowedFormat(
-  file: { name: string; type: string },
+export function classifyUpload(
+  file: SavedFile,
   rules: AppSettings["upload"],
-) {
-  const extOk = rules.extensions.includes(fileExtension(file.name));
-  const mimeOk = file.type.length > 0 && rules.mimeTypes.includes(file.type);
-  return extOk || mimeOk;
+): ClassifiedFile | undefined {
+  const mime = file.type.split(";")[0]?.trim() ?? "";
+  if (mime !== "" && rules.audio.mimeTypes.includes(mime)) {
+    return { ...file, kind: "audio" };
+  }
+  if (mime !== "" && rules.video.mimeTypes.includes(mime)) {
+    return { ...file, kind: "video" };
+  }
+  const ext = fileExtension(file.name);
+  if (rules.audio.extensions.includes(ext)) {
+    return { ...file, kind: "audio" };
+  }
+  if (rules.video.extensions.includes(ext)) {
+    return { ...file, kind: "video" };
+  }
+  return undefined;
 }

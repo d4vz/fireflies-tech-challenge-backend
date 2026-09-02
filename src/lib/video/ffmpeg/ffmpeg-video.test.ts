@@ -84,7 +84,40 @@ async function convertSample(samplePath: string, destPath: string) {
 
 const settings = await loadSettings(settingsFileUrl);
 
-for (const ext of settings.upload.extensions) {
+function audioCodecArgs(ext: string): string[] {
+  switch (ext) {
+    case "mp3":
+      return ["-c:a", "libmp3lame"];
+    case "wav":
+      return ["-c:a", "pcm_s16le"];
+    case "m4a":
+      return ["-c:a", "aac"];
+    case "aac":
+      return ["-c:a", "aac", "-f", "adts"];
+    case "ogg":
+      return ["-c:a", "libvorbis"];
+    case "flac":
+      return ["-c:a", "flac"];
+    default:
+      throw new Error(`unsupported audio fixture .${ext}`);
+  }
+}
+
+async function writeAudioSample(dir: string, ext: string) {
+  const dest = path.join(dir, `clip.${ext}`);
+  await run("ffmpeg", [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "sine=frequency=1000:duration=2",
+    ...audioCodecArgs(ext),
+    dest,
+  ]);
+  return dest;
+}
+
+for (const ext of settings.upload.video.extensions) {
   test(`ffmpeg reports duration, thumbnail, and audio for .${ext}`, async () => {
     const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
     const samplePath = await writeSample(dir);
@@ -103,6 +136,22 @@ for (const ext of settings.upload.extensions) {
     assert.equal(jpeg[0], 0xff);
     assert.equal(jpeg[1], 0xd8);
     assert.equal(audioPath, path.join(dir, "audio.mp3"));
+    assert.ok(info.size > 0);
+  });
+}
+
+for (const ext of settings.upload.audio.extensions) {
+  test(`ffmpeg reports duration and extract for audio .${ext}`, async () => {
+    const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+    const audioPath = await writeAudioSample(dir, ext);
+    const video = createFfmpegVideo();
+
+    const durationInSeconds = await video.durationInSeconds(audioPath);
+    const extracted = await video.extract(audioPath);
+    const info = await stat(extracted);
+
+    assert.equal(durationInSeconds, 2);
+    assert.equal(extracted, path.join(dir, "audio.mp3"));
     assert.ok(info.size > 0);
   });
 }

@@ -6,15 +6,35 @@ models:
   chat: gpt-5.1
 upload:
   maxFileBytes: 5368709120
-  mimeTypes:
-    - video/mp4
-    - video/webm
-    - video/quicktime
-    - video/x-matroska
-    - video/x-m4v
-  extensions:
-    - mp4
-    - webm
-    - mov
-    - mkv
-    - m4v
+  video:
+    mimeTypes:
+      - video/mp4
+      - video/webm
+      - video/quicktime
+      - video/x-matroska
+      - video/x-m4v
+    extensions:
+      - mp4
+      - webm
+      - mov
+      - mkv
+      - m4v
+  audio:
+    mimeTypes:
+      - audio/mpeg
+      - audio/mp3
+      - audio/wav
+      - audio/x-wav
+      - audio/mp4
+      - audio/x-m4a
+      - audio/aac
+      - audio/ogg
+      - audio/flac
+      - audio/webm
+    extensions:
+      - mp3
+      - wav
+      - m4a
+      - aac
+      - ogg
+      - flac

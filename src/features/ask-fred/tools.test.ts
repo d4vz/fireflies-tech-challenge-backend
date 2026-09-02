@@ -155,6 +155,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
           status: "ready",
           summary: { text: "hello", takeaways: [], actionItems: [] },
           blob: {
+            kind: "video",
             url: "http://127.0.0.1:9000/fireflies/meetings/6a963d4f786296c73b01d6d0/video",
             durationInSeconds: 12,
             sizeInBytes: 100,

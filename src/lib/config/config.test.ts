@@ -11,10 +11,16 @@ models:
   chat: gpt-4o-mini
 upload:
   maxFileBytes: 5368709120
-  mimeTypes:
-    - video/mp4
-  extensions:
-    - mp4
+  video:
+    mimeTypes:
+      - video/mp4
+    extensions:
+      - mp4
+  audio:
+    mimeTypes:
+      - audio/mpeg
+    extensions:
+      - mp3
 `;
 
 test("parseSettings reads models, chunk size, and upload limits from yaml", () => {
@@ -23,6 +29,8 @@ test("parseSettings reads models, chunk size, and upload limits from yaml", () =
   assert.equal(settings.models.summary, "gpt-4o-mini");
   assert.equal(settings.models.chat, "gpt-4o-mini");
   assert.equal(settings.upload.maxFileBytes, 5368709120);
+  assert.deepEqual(settings.upload.video.extensions, ["mp4"]);
+  assert.deepEqual(settings.upload.audio.extensions, ["mp3"]);
 });
 
 test("AskFred chat model is gpt-5.1", async () => {

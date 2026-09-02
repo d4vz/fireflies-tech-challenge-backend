@@ -32,6 +32,7 @@ function sampleMeeting(id: ObjectId, sourceId: string): WithId<Meeting> {
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
     status: "failed",
     blob: {
+      kind: "video",
       url: "/v",
       durationInSeconds: 1,
       sizeInBytes: 1,

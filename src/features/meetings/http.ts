@@ -5,7 +5,7 @@ import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
-import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
+import { createRequestTempFile, classifyUpload } from "./upload-file.ts";
 import { storeMeeting } from "./store-meeting.ts";
 import { meetingThumbnailKey, meetingVideoKey, type MeetingsStore } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
@@ -87,13 +87,14 @@ export function mountMeetings(app: Hono, deps: MeetingsHttpDeps) {
         return c.json({ error: "file is required" }, 400);
       }
 
-      if (!isAllowedFormat(file, deps.settings.upload)) {
+      const classified = classifyUpload(file, deps.settings.upload);
+      if (classified === undefined) {
         await closeFile();
         return c.json({ error: "file format is not supported" }, 400);
       }
 
       try {
-        const meeting = await storeMeeting(deps, file);
+        const meeting = await storeMeeting(deps, classified);
         return c.json(meeting, 201);
       } finally {
         await closeFile();
