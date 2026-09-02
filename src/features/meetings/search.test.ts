@@ -84,8 +84,9 @@ test("searchTranscripts ranks by embedding, drops missing meetings, and omits em
   const transcripts: TranscriptsStore = {
     insertAll: async () => unused(),
     listByMeeting: async () => unused(),
-    searchByEmbedding: async (embedding, limit) =>
-      chunks
+    searchByEmbedding: async (embedding, limit, meetingId) => {
+      assert.equal(meetingId, undefined);
+      return chunks
         .map((chunk) => ({
           meetingId: chunk.meetingId,
           index: chunk.index,
@@ -93,8 +94,8 @@ test("searchTranscripts ranks by embedding, drops missing meetings, and omits em
           score: cosine(embedding, chunk.embedding),
         }))
         .sort((left, right) => right.score - left.score)
-        .slice(0, limit),
-    searchByEmbeddingForMeeting: async () => unused(),
+        .slice(0, limit);
+    },
     ensureVectorIndex: async () => unused(),
   };
   const hits = await searchTranscripts(
@@ -158,7 +159,6 @@ test("searchMeetingTranscripts returns [] without embedding when the meeting is 
     insertAll: async () => unused(),
     listByMeeting: async () => unused(),
     searchByEmbedding: async () => unused(),
-    searchByEmbeddingForMeeting: async () => unused(),
     ensureVectorIndex: async () => unused(),
   };
   const hits = await searchMeetingTranscripts(
@@ -179,12 +179,10 @@ test("searchMeetingTranscripts returns [] without embedding when the meeting is 
   assert.equal(embedCalls, 0);
 });
 
-test("searchMeetingTranscripts stamps sourceId from the loaded meeting and does not call searchByEmbedding", async () => {
+test("searchMeetingTranscripts stamps sourceId from the loaded meeting and passes meetingId to searchByEmbedding", async () => {
   const meetingId = new ObjectId();
-  const otherId = new ObjectId();
   const meeting = sampleMeeting(meetingId, "interview.mp4");
-  let corpusCalls = 0;
-  const scoped: { meetingId: string; embedding: number[]; limit: number }[] = [];
+  const scoped: { embedding: number[]; limit: number; meetingId: string | undefined }[] = [];
   const meetings: MeetingsStore = {
     createId: () => new ObjectId(),
     insert: async () => unused(),
@@ -198,24 +196,14 @@ test("searchMeetingTranscripts stamps sourceId from the loaded meeting and does 
   const transcripts: TranscriptsStore = {
     insertAll: async () => unused(),
     listByMeeting: async () => unused(),
-    searchByEmbedding: async () => {
-      corpusCalls += 1;
-      return [];
-    },
-    searchByEmbeddingForMeeting: async (id, embedding, limit) => {
-      scoped.push({ meetingId: id, embedding, limit });
+    searchByEmbedding: async (embedding, limit, scopedMeetingId) => {
+      scoped.push({ embedding, limit, meetingId: scopedMeetingId });
       return [
         {
-          meetingId: id,
+          meetingId: meetingId.toHexString(),
           index: 1,
           text: "we talked about the launch date",
           score: 0.9,
-        },
-        {
-          meetingId: otherId.toHexString(),
-          index: 0,
-          text: "wrong meeting",
-          score: 0.99,
         },
       ];
     },
@@ -237,6 +225,5 @@ test("searchMeetingTranscripts stamps sourceId from the loaded meeting and does 
   assert.equal(hits[0]?.sourceId, "interview.mp4");
   assert.equal(hits[0]?.meetingId, meetingId.toHexString());
   assert.equal(hits[0]?.createdAt.toISOString(), "2026-09-01T12:00:00.000Z");
-  assert.equal(corpusCalls, 0);
-  assert.deepEqual(scoped, [{ meetingId: meetingId.toHexString(), embedding: [1, 0], limit: 8 }]);
+  assert.deepEqual(scoped, [{ embedding: [1, 0], limit: 8, meetingId: meetingId.toHexString() }]);
 });

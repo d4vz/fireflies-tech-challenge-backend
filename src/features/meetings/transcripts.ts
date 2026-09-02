@@ -30,11 +30,10 @@ export type TranscriptChunkHit = {
 export type TranscriptsStore = {
   insertAll: (meetingId: string, chunks: NewTranscriptChunk[]) => Promise<void>;
   listByMeeting: (meetingId: string) => Promise<PublicTranscriptChunk[]>;
-  searchByEmbedding: (embedding: number[], limit: number) => Promise<TranscriptChunkHit[]>;
-  searchByEmbeddingForMeeting: (
-    meetingId: string,
+  searchByEmbedding: (
     embedding: number[],
     limit: number,
+    meetingId?: string,
   ) => Promise<TranscriptChunkHit[]>;
   ensureVectorIndex: () => Promise<void>;
 };
@@ -77,6 +76,15 @@ type VectorHit = {
   index: number;
   text: string;
   score: number;
+};
+
+type VectorSearchStage = {
+  index: string;
+  path: string;
+  queryVector: number[];
+  numCandidates: number;
+  limit: number;
+  filter?: { meetingId: ObjectId };
 };
 
 function isIndexExistsError(error: unknown): error is Error {
@@ -140,46 +148,23 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         .sort({ index: 1 })
         .toArray();
     },
-    searchByEmbedding: async (embedding, limit) => {
-      const rows = await collection
-        .aggregate<VectorHit>([
-          {
-            $vectorSearch: {
-              index: VECTOR_INDEX_NAME,
-              path: "embedding",
-              queryVector: embedding,
-              numCandidates: Math.max(limit * 10, 10),
-              limit,
-            },
-          },
-          {
-            $project: {
-              meetingId: 1,
-              index: 1,
-              text: 1,
-              score: { $meta: "vectorSearchScore" },
-            },
-          },
-        ])
-        .toArray();
-      return rows.map(toChunkHit);
-    },
-    searchByEmbeddingForMeeting: async (meetingId, embedding, limit) => {
-      if (!ObjectId.isValid(meetingId)) {
+    searchByEmbedding: async (embedding, limit, meetingId) => {
+      if (meetingId !== undefined && !ObjectId.isValid(meetingId)) {
         return [];
+      }
+      const stage: VectorSearchStage = {
+        index: VECTOR_INDEX_NAME,
+        path: "embedding",
+        queryVector: embedding,
+        numCandidates: Math.max(limit * 10, 10),
+        limit,
+      };
+      if (meetingId !== undefined) {
+        stage.filter = { meetingId: new ObjectId(meetingId) };
       }
       const rows = await collection
         .aggregate<VectorHit>([
-          {
-            $vectorSearch: {
-              index: VECTOR_INDEX_NAME,
-              path: "embedding",
-              queryVector: embedding,
-              numCandidates: Math.max(limit * 10, 10),
-              limit,
-              filter: { meetingId: new ObjectId(meetingId) },
-            },
-          },
+          { $vectorSearch: stage },
           {
             $project: {
               meetingId: 1,

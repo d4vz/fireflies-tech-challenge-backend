@@ -76,16 +76,9 @@ export async function searchMeetingTranscripts(
   if (vector === undefined) {
     return [];
   }
-  const hits = await deps.transcripts.searchByEmbeddingForMeeting(
-    query.meetingId,
-    vector,
-    query.limit,
-  );
+  const hits = await deps.transcripts.searchByEmbedding(vector, query.limit, query.meetingId);
   const joined: TranscriptHit[] = [];
   for (const hit of hits) {
-    if (hit.meetingId !== query.meetingId) {
-      continue;
-    }
     joined.push({
       meetingId: hit.meetingId,
       sourceId: meeting.sourceId,
