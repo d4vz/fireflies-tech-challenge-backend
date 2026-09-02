@@ -7,6 +7,7 @@ chunkSize: 500
 models:
   transcribe: gpt-4o-transcribe
   summary: gpt-4o-mini
+  embed: text-embedding-3-small
 upload:
   maxFileBytes: 5368709120
   mimeTypes:
@@ -34,6 +35,7 @@ test("parseSecrets reads keys from env and keeps secrets out of yaml", () => {
     S3_ACCESS_KEY: "key",
     S3_SECRET_KEY: "secret",
     S3_BUCKET: "fireflies",
+    REDIS_URL: "redis://127.0.0.1:6379",
   });
   assert.equal(secrets.OPENAI_API_KEY, "sk-test");
   assert.equal(secrets.S3_REGION, "us-east-1");

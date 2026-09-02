@@ -2,6 +2,7 @@ chunkSize: 500
 models:
   transcribe: gpt-4o-transcribe
   summary: gpt-4o-mini
+  embed: text-embedding-3-small
 upload:
   maxFileBytes: 5368709120
   mimeTypes:

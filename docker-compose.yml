@@ -26,6 +26,11 @@ services:
       - mongo-configdb:/data/configdb
       - mongo-mongot:/data/mongot
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
 volumes:
   minio-data:
   mongo-db:

@@ -6,6 +6,7 @@ const settingsSchema = z.object({
   models: z.object({
     transcribe: z.string().min(1),
     summary: z.string().min(1),
+    embed: z.string().min(1),
   }),
   upload: z.object({
     maxFileBytes: z.number().int().positive(),
@@ -24,6 +25,7 @@ const secretsSchema = z.object({
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_PUBLIC_ENDPOINT: z.string().min(1).optional(),
   FRONTEND_ORIGIN: z.string().min(1).optional(),
+  REDIS_URL: z.string().min(1),
 });
 
 export type AppSettings = z.infer<typeof settingsSchema>;

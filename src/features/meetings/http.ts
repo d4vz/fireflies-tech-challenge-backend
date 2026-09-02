@@ -1,10 +1,22 @@
 import type { Hono } from "hono";
 import { bodyLimit } from "hono/body-limit";
-import { SSEStreamingApi, streamSSE } from "hono/streaming";
 import type { Blob } from "../../lib/blob/index.ts";
+import type { AppSettings } from "../../lib/config/index.ts";
+import type { Queue } from "../../lib/queue/index.ts";
+import type { Video } from "../../lib/video/index.ts";
 import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
-import { UploadEvent, uploadMeeting, type UploadMeetingDeps } from "./upload-meeting.ts";
-import { meetingThumbnailKey, meetingVideoKey } from "./store.ts";
+import { storeMeeting } from "./store-meeting.ts";
+import { meetingThumbnailKey, meetingVideoKey, type MeetingsStore } from "./store.ts";
+import type { TranscriptsStore } from "./transcripts.ts";
+
+export type MeetingsHttpDeps = {
+  video: Video;
+  blob: Blob;
+  meetings: MeetingsStore;
+  transcripts: TranscriptsStore;
+  queue: Queue;
+  settings: AppSettings;
+};
 
 async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
   const file = await blob.get(key);
@@ -19,9 +31,28 @@ async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
   });
 }
 
-export function mountMeetings(app: Hono, deps: UploadMeetingDeps) {
+const DEFAULT_PAGE = 1;
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 50;
+
+function positiveInt(value: string | undefined, fallback: number, max: number) {
+  const parsed = Number.parseInt(value ?? "", 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+}
+
+export function mountMeetings(app: Hono, deps: MeetingsHttpDeps) {
   app.get("/meetings", async (c) => {
-    return c.json(await deps.meetings.list());
+    const page = positiveInt(c.req.query("page"), DEFAULT_PAGE, Number.MAX_SAFE_INTEGER);
+    const limit = positiveInt(c.req.query("limit"), DEFAULT_LIMIT, MAX_LIMIT);
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      deps.meetings.list(skip, limit),
+      deps.meetings.count(),
+    ]);
+    return c.json({ items, total, page, limit });
   });
 
   app.get("/meetings/:id/thumbnail", async (c) => {
@@ -39,6 +70,14 @@ export function mountMeetings(app: Hono, deps: UploadMeetingDeps) {
         "application/octet-stream",
       )) ?? c.json({ error: "not found" }, 404)
     );
+  });
+
+  app.get("/meetings/:id/transcripts", async (c) => {
+    const meeting = await deps.meetings.get(c.req.param("id"));
+    if (!meeting) {
+      return c.json({ error: "meeting not found" }, 404);
+    }
+    return c.json(await deps.transcripts.listByMeeting(c.req.param("id")));
   });
 
   app.get("/meetings/:id", async (c) => {
@@ -70,42 +109,12 @@ export function mountMeetings(app: Hono, deps: UploadMeetingDeps) {
         return c.json({ error: "file format is not supported" }, 400);
       }
 
-      const results = uploadMeeting(deps, file);
-
-      return streamSSE(c, (stream) => handleMeetingResults(results, stream, closeFile));
+      try {
+        const meeting = await storeMeeting(deps, file);
+        return c.json(meeting, 201);
+      } finally {
+        await closeFile();
+      }
     },
   );
 }
-
-const handleMeetingResults = async (
-  results: AsyncGenerator<UploadEvent>,
-  stream: SSEStreamingApi,
-  closeFile: () => Promise<void>,
-) => {
-  try {
-    for await (const item of results) {
-      switch (item.event) {
-        case "progress":
-          await stream.writeSSE({
-            event: "progress",
-            data: JSON.stringify({ stage: item.stage }),
-          });
-          break;
-        case "done":
-          await stream.writeSSE({
-            event: "done",
-            data: JSON.stringify(item.meeting),
-          });
-          break;
-      }
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "unknown error";
-    await stream.writeSSE({
-      event: "error",
-      data: JSON.stringify({ error: message }),
-    });
-  } finally {
-    await closeFile();
-  }
-};
