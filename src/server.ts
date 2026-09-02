@@ -27,7 +27,7 @@ const model = openai(settings.models.chat);
 const meetings = createMeetingsStore(mongo);
 const transcripts = createTranscriptsStore(mongo);
 const queue = createBullmqQueue(secrets.REDIS_URL);
-const auth = createClerkAuthVerify(secrets.CLERK_SECRET_KEY, secrets.FRONTEND_ORIGIN);
+const auth = createClerkAuthVerify(secrets.CLERK_SECRET_KEY);
 
 const processDeps = {
   video,
