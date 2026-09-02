@@ -134,7 +134,7 @@ test("ffmpeg reports duration for a webm with no format duration", async () => {
   assert.equal(durationInSeconds, 2);
 });
 
-test("ffmpeg extract fails with the ffmpeg message when the clip has no audio", async () => {
+test("ffmpeg extract fails with a short message when the clip has no audio", async () => {
   const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
   const videoPath = path.join(dir, "silent.mp4");
   await run("ffmpeg", [
@@ -149,8 +149,5 @@ test("ffmpeg extract fails with the ffmpeg message when the clip has no audio", 
   ]);
   const video = createFfmpegVideo();
 
-  await assert.rejects(
-    () => video.extract(videoPath),
-    /ffmpeg exited with [\s\S]*(does not contain any stream|Stream map)/i,
-  );
+  await assert.rejects(() => video.extract(videoPath), { message: "Could not extract audio" });
 });

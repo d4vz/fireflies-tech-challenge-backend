@@ -11,7 +11,7 @@ function failMessage(command: string, code: number | null, stderr: string) {
   return `${command} exited with ${code}: ${detail}`;
 }
 
-function run(command: string, args: string[]) {
+function run(command: string, args: string[], failed: string) {
   return new Promise<string>((resolve, reject) => {
     const child = spawn(command, args);
     let stdout = "";
@@ -28,7 +28,8 @@ function run(command: string, args: string[]) {
         resolve(stdout);
         return;
       }
-      reject(new Error(failMessage(command, code, stderr)));
+      console.error(failMessage(command, code, stderr));
+      reject(new Error(failed));
     });
   });
 }
@@ -60,30 +61,38 @@ function lastPacketEnd(output: string) {
 }
 
 async function formatDuration(inputPath: string) {
-  const output = await run("ffprobe", [
-    "-v",
-    "error",
-    "-show_entries",
-    "format=duration",
-    "-of",
-    "default=noprint_wrappers=1:nokey=1",
-    inputPath,
-  ]);
+  const output = await run(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-show_entries",
+      "format=duration",
+      "-of",
+      "default=noprint_wrappers=1:nokey=1",
+      inputPath,
+    ],
+    "Could not read video duration",
+  );
   return parseSeconds(output);
 }
 
 async function packetDuration(inputPath: string) {
-  const output = await run("ffprobe", [
-    "-v",
-    "error",
-    "-select_streams",
-    "v:0",
-    "-show_entries",
-    "packet=pts_time,duration_time",
-    "-of",
-    "csv=p=0",
-    inputPath,
-  ]);
+  const output = await run(
+    "ffprobe",
+    [
+      "-v",
+      "error",
+      "-select_streams",
+      "v:0",
+      "-show_entries",
+      "packet=pts_time,duration_time",
+      "-of",
+      "csv=p=0",
+      inputPath,
+    ],
+    "Could not read video duration",
+  );
   return lastPacketEnd(output);
 }
 
@@ -91,40 +100,27 @@ export function createFfmpegVideo(): Video {
   return {
     extract: async (inputPath) => {
       const outputPath = beside(inputPath, "audio.mp3");
-      await run("ffmpeg", [
-        "-y",
-        "-i",
-        inputPath,
-        "-vn",
-        "-acodec",
-        "libmp3lame",
-        "-q:a",
-        "4",
-        outputPath,
-      ]);
+      await run(
+        "ffmpeg",
+        ["-y", "-i", inputPath, "-vn", "-acodec", "libmp3lame", "-q:a", "4", outputPath],
+        "Could not extract audio",
+      );
       return outputPath;
     },
     durationInSeconds: async (inputPath) => {
       const seconds = (await formatDuration(inputPath)) ?? (await packetDuration(inputPath));
       if (seconds === undefined) {
-        throw new Error("ffprobe did not return a duration: N/A");
+        throw new Error("Could not read video duration");
       }
       return Math.round(seconds);
     },
     thumbnail: async (inputPath) => {
       const outputPath = beside(inputPath, "thumb.jpg");
-      await run("ffmpeg", [
-        "-y",
-        "-i",
-        inputPath,
-        "-ss",
-        "0",
-        "-frames:v",
-        "1",
-        "-q:v",
-        "2",
-        outputPath,
-      ]);
+      await run(
+        "ffmpeg",
+        ["-y", "-i", inputPath, "-ss", "0", "-frames:v", "1", "-q:v", "2", outputPath],
+        "Could not create a thumbnail",
+      );
       const image = await readFile(outputPath);
       return new File([image], "thumb.jpg", { type: "image/jpeg" });
     },
