@@ -9,7 +9,8 @@ WORKDIR /app
 
 COPY package.json bun.lock ./
 ENV HUSKY=0
-RUN bun install --frozen-lockfile --production --ignore-scripts
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+  bun install --frozen-lockfile --production --ignore-scripts
 
 COPY config.yaml tsconfig.json ./
 COPY src ./src

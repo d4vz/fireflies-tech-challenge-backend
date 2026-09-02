@@ -1,6 +1,7 @@
 services:
   minio:
     image: minio/minio:latest
+    pull_policy: missing
     command: server /data --console-address ":9001"
     ports:
       - "9000:9000"
@@ -22,6 +23,7 @@ services:
   # api service: use the mongodb hostname on the compose network.
   mongodb:
     image: mongodb/mongodb-atlas-local:preview
+    pull_policy: missing
     hostname: mongodb
     ports:
       - "27017:27017"
@@ -35,6 +37,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    pull_policy: missing
     ports:
       - "6379:6379"
     healthcheck:
