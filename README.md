@@ -36,6 +36,8 @@ return new Worker<MeetingJobData>(
 
 The worker marks the meeting `processing`, pulls the file from MinIO, and extracts audio with ffmpeg. OpenAI transcribes it, then we chunk the text and embed the chunks. A summary pass creates takeaways and action items. Transcripts land in Mongo, the meeting is marked `ready`, and AskFred can search it.
 
+Files longer than about 10 minutes can stay `processing` for a long time. I found that while building this. Transcription is the slow step, and that wait is an OpenAI limitation, not the queue.
+
 ## Data
 
 Tasks live on the meeting document. Mongo's rule is [data that is accessed together is stored together](https://www.mongodb.com/docs/manual/data-modeling/). The meeting detail and the actions list both need those tasks, so a second collection would only add lookups.
