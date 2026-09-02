@@ -2,7 +2,11 @@ import { tool } from "ai";
 import type { WithId } from "mongodb";
 import { z } from "zod";
 import { meetingListQuerySchema, type MeetingListPage } from "../meetings/list-query.ts";
-import { transcriptSearchQuerySchema, type TranscriptHit } from "../meetings/search.ts";
+import {
+  meetingTranscriptSearchQuerySchema,
+  transcriptSearchQuerySchema,
+  type TranscriptHit,
+} from "../meetings/search.ts";
 import type { Meeting } from "../meetings/store.ts";
 import type { AskFredDeps } from "./http.ts";
 
@@ -93,15 +97,30 @@ export function createAskFredTools(deps: AskFredDeps) {
     }),
     searchTranscripts: tool({
       description: [
-        "Semantic search over transcript chunk embeddings. Not substring match.",
-        "Use this when the user asks what was said, whether a topic came up, or wants a quote from a call.",
+        "Semantic search over transcript chunks across the meeting library. Not substring match.",
+        "Use this when the user asks what was said and did not name a meeting.",
+        "Do not use this when they mean one call, this meeting, a sourceId they named, or an id you already have.",
         "Examples:",
-        "- 'did we talk about the launch date?'",
-        "- 'find what people said about billing'",
-        "- 'quotes about the Q3 deadline'",
+        "- 'did we talk about the launch date?' with no meeting named",
+        "- 'find what people said about billing' across calls",
       ].join(" "),
       inputSchema: transcriptSearchQuerySchema,
       execute: async (query) => (await deps.searchTranscripts(query)).map(toAskFredTranscriptHit),
+    }),
+    searchMeetingTranscripts: tool({
+      description: [
+        "Semantic search over transcript chunks in one meeting. Not substring match.",
+        "meetingId is required. The app does not send a current meeting.",
+        "Get meetingId from listMeetings, from a prior search hit, or from the user.",
+        "If you only have a sourceId, call listMeetings first and use that meeting's id.",
+        "Examples:",
+        "- 'on this call, did we talk about the launch date?'",
+        "- 'in interview.mp4, quotes about billing'",
+        "- follow-up on a meeting you just listed",
+      ].join(" "),
+      inputSchema: meetingTranscriptSearchQuerySchema,
+      execute: async (query) =>
+        (await deps.searchMeetingTranscripts(query)).map(toAskFredTranscriptHit),
     }),
   };
 }

@@ -20,6 +20,16 @@ test("askFredSystemPrompt tells Fred to link meetings with the app origin", () =
   assert.doesNotMatch(prompt, /You are Fred, an assistant/);
 });
 
+test("askFredSystemPrompt names three tools and meeting-scoped search", () => {
+  const prompt = askFredSystemPrompt(new Date("2026-09-01T17:17:00.000Z"), "http://localhost:8080");
+  assert.match(prompt, /three tools/);
+  assert.match(prompt, /searchMeetingTranscripts is for what was said in one meeting/);
+  assert.match(prompt, /The app does not send a current meeting/);
+  assert.match(prompt, /searchTranscripts is for what was said across the library/);
+  assert.match(prompt, /Prefer searchMeetingTranscripts once you have the meetingId/);
+  assert.doesNotMatch(prompt, /two tools/);
+});
+
 test("parseAskFredOrigin keeps a bare origin and drops paths", () => {
   assert.equal(parseAskFredOrigin("http://localhost:8080"), "http://localhost:8080");
   assert.equal(parseAskFredOrigin("http://localhost:8080/"), "http://localhost:8080");

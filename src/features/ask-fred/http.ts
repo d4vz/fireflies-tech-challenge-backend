@@ -12,7 +12,11 @@ import {
 import type { Hono } from "hono";
 import { z } from "zod";
 import type { MeetingListPage, MeetingListQuery } from "../meetings/list-query.ts";
-import type { TranscriptHit, TranscriptSearchQuery } from "../meetings/search.ts";
+import type {
+  MeetingTranscriptSearchQuery,
+  TranscriptHit,
+  TranscriptSearchQuery,
+} from "../meetings/search.ts";
 import { askFredSystemPrompt, parseAskFredOrigin } from "./prompt.ts";
 import { createAskFredTools } from "./tools.ts";
 
@@ -22,6 +26,7 @@ export type AskFredDeps = {
   model: LanguageModel;
   listMeetings: (query: MeetingListQuery) => Promise<MeetingListPage>;
   searchTranscripts: (query: TranscriptSearchQuery) => Promise<TranscriptHit[]>;
+  searchMeetingTranscripts: (query: MeetingTranscriptSearchQuery) => Promise<TranscriptHit[]>;
   origin?: string;
 };
 

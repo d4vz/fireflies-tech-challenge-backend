@@ -49,6 +49,7 @@ function testDeps(): CreateAppDeps {
       insertAll: async () => unused(),
       listByMeeting: async () => [],
       searchByEmbedding: async () => [],
+      searchByEmbeddingForMeeting: async () => [],
       ensureVectorIndex: async () => undefined,
     },
     queue: { enqueue: async () => undefined },
