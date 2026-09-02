@@ -9,7 +9,7 @@
 - `src/lib/<capability>/index.ts` is the interface. The vendor adapter lives under it: `src/lib/blob/minio/minio-blob.ts`, `src/lib/transcribe/openai/openai-transcribe.ts`, `src/lib/summarize/openai/openai-summarize.ts`, `src/lib/embed/openai/openai-embed.ts`, `src/lib/video/ffmpeg/ffmpeg-video.ts`, `src/lib/queue/bullmq/bullmq-queue.ts`.
 - `src/lib/config` parses `config.yaml` (models, chunk size, upload limits) and `.env` secrets with Zod. Secrets do not belong in yaml.
 - `src/lib/middleware` holds shared Hono handlers. `create-app.ts` mounts them before routes.
-- `POST /meetings/upload` stores the video and a queued meeting, then enqueues processing. `GET /meetings?page=&limit=` returns `{ items, total, page, limit }` newest first. `GET /meetings/:id/transcripts` returns chunk text without embeddings.
+- `POST /meetings/upload` stores the video and a queued meeting, then enqueues processing. `GET /meetings` accepts `page`, `limit`, `from`, `to` (exclusive), `status`, and `sourceId` via zValidator and returns `{ items, total, page, limit }` newest first. `GET /meetings/:id/transcripts` returns chunk text without embeddings. `POST /ask-fred` streams AskFred UI messages. Tools call the same list query and semantic transcript search.
 - `src/lib/db/mongo` holds one reusable `MongoClient`. It does not export a generic database interface.
 
 ## Import rule
