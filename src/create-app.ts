@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Blob } from "./lib/blob/index.ts";
+import { mountMiddleware } from "./lib/middleware/index.ts";
 import type { Transcribe } from "./lib/transcribe/index.ts";
 import type { Video } from "./lib/video/index.ts";
 import { mountHealth } from "./features/health/http.ts";
@@ -15,7 +16,7 @@ export type CreateAppDeps = {
 
 export function createApp(deps: CreateAppDeps) {
   const app = new Hono();
-
+  mountMiddleware(app);
   mountHealth(app, deps);
   mountMeetings(app, deps);
 

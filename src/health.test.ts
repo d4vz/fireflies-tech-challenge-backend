@@ -7,7 +7,6 @@ const idle = {
     extract: async (file: File) => file,
     durationInSeconds: async () => 0,
     thumbnail: async (file: File) => file,
-    ping: async () => {},
   },
   blob: { put: async (input: { key: string }) => input.key, ping: async () => {} },
   transcribe: { run: async () => ({ text: "" }), ping: async () => {} },
@@ -24,7 +23,7 @@ test("GET /health returns ok when every service ping succeeds", async () => {
   assert.equal(res.status, 200);
   assert.deepEqual(await res.json(), {
     status: "ok",
-    services: { video: "ok", blob: "ok", transcribe: "ok" },
+    services: { blob: "ok", transcribe: "ok" },
   });
 });
 
@@ -43,6 +42,6 @@ test("GET /health returns 503 when a service ping fails", async () => {
   assert.equal(res.status, 503);
   assert.deepEqual(await res.json(), {
     status: "error",
-    services: { video: "ok", blob: "error", transcribe: "ok" },
+    services: { blob: "minio down", transcribe: "ok" },
   });
 });

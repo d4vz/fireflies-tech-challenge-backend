@@ -45,3 +45,25 @@ test("ffmpeg reports duration and writes a jpeg thumbnail", async () => {
   assert.equal(jpeg[0], 0xff);
   assert.equal(jpeg[1], 0xd8);
 });
+
+test("ffmpeg extract fails with the ffmpeg message when the clip has no audio", async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), "clip-"));
+  const videoPath = path.join(dir, "silent.mp4");
+  await run("ffmpeg", [
+    "-y",
+    "-f",
+    "lavfi",
+    "-i",
+    "testsrc=duration=1:size=320x240:rate=1",
+    "-pix_fmt",
+    "yuv420p",
+    videoPath,
+  ]);
+  const file = new File([await readFile(videoPath)], "silent.mp4", { type: "video/mp4" });
+  const video = createFfmpegVideo();
+
+  await assert.rejects(
+    () => video.extract(file),
+    /ffmpeg exited with [\s\S]*(does not contain any stream|Stream map)/i,
+  );
+});

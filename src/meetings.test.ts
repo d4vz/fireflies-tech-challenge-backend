@@ -16,7 +16,6 @@ test("POST /meetings/upload stores the video and thumbnail, then inserts a meeti
       extract: async () => new File(["audio-bytes"], "clip.mp3", { type: "audio/mpeg" }),
       durationInSeconds: async () => 12,
       thumbnail: async () => new File(["thumb-bytes"], "thumb.jpg", { type: "image/jpeg" }),
-      ping: async () => {},
     },
     blob: {
       put: async (input) => {
@@ -79,7 +78,6 @@ test("POST /meetings/upload records two chunks when the transcript is longer tha
       extract: async () => new File(["audio-bytes"], "clip.mp3", { type: "audio/mpeg" }),
       durationInSeconds: async () => 1,
       thumbnail: async () => new File(["thumb-bytes"], "thumb.jpg", { type: "image/jpeg" }),
-      ping: async () => {},
     },
     blob: { put: async (input) => `https://blob.test/${input.key}`, ping: async () => {} },
     transcribe: { run: async () => ({ text }), ping: async () => {} },
@@ -103,7 +101,6 @@ test("POST /meetings/upload returns 400 when file is missing", async () => {
       extract: async (file) => file,
       durationInSeconds: async () => 0,
       thumbnail: async (file) => file,
-      ping: async () => {},
     },
     blob: { put: async (input) => `https://blob.test/${input.key}`, ping: async () => {} },
     transcribe: { run: async () => ({ text: "" }), ping: async () => {} },
@@ -117,4 +114,28 @@ test("POST /meetings/upload returns 400 when file is missing", async () => {
 
   assert.equal(res.status, 400);
   assert.deepEqual(await res.json(), { error: "file is required" });
+});
+
+test("POST /meetings/upload returns the failure when processing throws", async () => {
+  const app = createApp({
+    video: {
+      extract: async () => {
+        throw new Error("ffmpeg: Output file does not contain any stream");
+      },
+      durationInSeconds: async () => 1,
+      thumbnail: async () => new File(["thumb-bytes"], "thumb.jpg", { type: "image/jpeg" }),
+    },
+    blob: { put: async (input) => `https://blob.test/${input.key}`, ping: async () => {} },
+    transcribe: { run: async () => ({ text: "" }), ping: async () => {} },
+    meetings: { createId: () => meetingId, insert: async () => {} },
+  });
+
+  const form = new FormData();
+  form.set("file", new File(["video-bytes"], "clip.mp4", { type: "video/mp4" }));
+  const res = await app.request("/meetings/upload", { method: "POST", body: form });
+
+  assert.equal(res.status, 500);
+  assert.deepEqual(await res.json(), {
+    error: "ffmpeg: Output file does not contain any stream",
+  });
 });

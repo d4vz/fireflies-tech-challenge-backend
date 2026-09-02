@@ -4,26 +4,24 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import type { Video } from "../index.ts";
 
-function run(command: string, args: string[]) {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(command, args);
-    child.on("error", reject);
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-        return;
-      }
-      reject(new Error(`${command} exited with ${code}`));
-    });
-  });
+function failMessage(command: string, code: number | null, stderr: string) {
+  const detail = stderr.trim();
+  if (detail.length === 0) {
+    return `${command} exited with ${code}`;
+  }
+  return `${command} exited with ${code}: ${detail}`;
 }
 
-function runCapture(command: string, args: string[]) {
+function run(command: string, args: string[]) {
   return new Promise<string>((resolve, reject) => {
     const child = spawn(command, args);
     let stdout = "";
+    let stderr = "";
     child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
     });
     child.on("error", reject);
     child.on("close", (code) => {
@@ -31,7 +29,7 @@ function runCapture(command: string, args: string[]) {
         resolve(stdout);
         return;
       }
-      reject(new Error(`${command} exited with ${code}`));
+      reject(new Error(failMessage(command, code, stderr)));
     });
   });
 }
@@ -64,7 +62,7 @@ export function createFfmpegVideo(): Video {
     },
     durationInSeconds: async (file) => {
       const { inputPath } = await writeInput(file);
-      const output = await runCapture("ffprobe", [
+      const output = await run("ffprobe", [
         "-v",
         "error",
         "-show_entries",
@@ -75,7 +73,7 @@ export function createFfmpegVideo(): Video {
       ]);
       const seconds = Number(output.trim());
       if (Number.isNaN(seconds)) {
-        return 0;
+        throw new Error(`ffprobe did not return a duration: ${output.trim()}`);
       }
       return Math.round(seconds);
     },
@@ -97,6 +95,5 @@ export function createFfmpegVideo(): Video {
       const image = await readFile(outputPath);
       return new File([image], "thumb.jpg", { type: "image/jpeg" });
     },
-    ping: () => run("ffmpeg", ["-version"]),
   };
 }

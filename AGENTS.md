@@ -7,6 +7,7 @@
 - `src/server.ts` listens. `src/create-app.ts` wires vendors and mounts routes.
 - Each feature owns its entity, HTTP, use case, and Store interface. The meetings store adapter uses the shared Mongo client.
 - `src/lib/<capability>/index.ts` is the interface. The vendor adapter lives under it: `src/lib/blob/minio/minio-blob.ts`, `src/lib/transcribe/openai/openai-transcribe.ts`, `src/lib/video/ffmpeg/ffmpeg-video.ts`.
+- `src/lib/middleware` holds shared Hono handlers. `create-app.ts` mounts them before routes.
 - `src/lib/db/mongo` holds one reusable `MongoClient`. It does not export a generic database interface.
 
 ## Import rule
