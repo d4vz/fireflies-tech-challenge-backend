@@ -62,11 +62,28 @@ test("AskFred uses medium reasoning", () => {
   assert.equal(ASK_FRED_REASONING_EFFORT, "medium");
 });
 
-test("POST /ask-fred returns 400 without an origin", async () => {
+test("POST /ask-fred returns 400 without FRONTEND_ORIGIN", async () => {
   const app = createApp(testDeps());
   const res = await app.request("/ask-fred", {
     method: "POST",
     headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }],
+    }),
+  });
+  assert.equal(res.status, 400);
+  assert.deepEqual(await res.json(), { error: "invalid origin" });
+});
+
+test("POST /ask-fred does not take origin from request headers", async () => {
+  const app = createApp(testDeps());
+  const res = await app.request("/ask-fred", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      origin: "http://localhost:8080",
+      "x-app-origin": "http://localhost:8080",
+    },
     body: JSON.stringify({
       messages: [{ id: "1", role: "user", parts: [{ type: "text", text: "hi" }] }],
     }),

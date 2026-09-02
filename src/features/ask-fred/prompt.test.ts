@@ -25,5 +25,9 @@ test("parseAskFredOrigin keeps a bare origin and drops paths", () => {
   assert.equal(parseAskFredOrigin("http://localhost:8080/"), "http://localhost:8080");
   assert.equal(parseAskFredOrigin("http://localhost:8080/meetings/1"), undefined);
   assert.equal(parseAskFredOrigin("https://meetings/abc"), undefined);
+  assert.equal(
+    parseAskFredOrigin("https://frontend-production-8339.up.railway.app"),
+    "https://frontend-production-8339.up.railway.app",
+  );
   assert.equal(parseAskFredOrigin(undefined), undefined);
 });
