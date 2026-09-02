@@ -1,0 +1,51 @@
+name: Update parent submodule
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  update-parent:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Bump parent gitlink
+        env:
+          GH_TOKEN: ${{ secrets.PARENT_GITHUB_TOKEN }}
+          PARENT_REPO: d4vz/fireflies-tech-challenge
+          SUBMODULE_PATH: backend
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "PARENT_GITHUB_TOKEN is not set"
+            exit 1
+          fi
+
+          tmp=$(mktemp -d)
+          git clone --depth 1 "https://x-access-token:${GH_TOKEN}@github.com/${PARENT_REPO}.git" "$tmp"
+          cd "$tmp"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          bump() {
+            git pull --rebase origin main
+            current=$(git rev-parse "HEAD:${SUBMODULE_PATH}")
+            if [ "$current" = "$SHA" ]; then
+              echo "Parent already points at ${SHA}"
+              return 0
+            fi
+            git update-index --cacheinfo "160000,${SHA},${SUBMODULE_PATH}"
+            git commit -m "chore: bump ${SUBMODULE_PATH} to ${SHA:0:7}"
+            git push origin HEAD:main
+          }
+
+          for _ in 1 2 3 4; do
+            if bump; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
