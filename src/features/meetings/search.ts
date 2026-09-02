@@ -1,6 +1,7 @@
 import { ObjectId } from "mongodb";
 import { z } from "zod";
 import type { Embed } from "../../lib/embed/index.ts";
+import { meetingName } from "./meeting-name.ts";
 import type { MeetingsStore } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
 
@@ -16,6 +17,7 @@ export type MeetingTranscriptSearchQuery = TranscriptSearchQuery & {
 export type TranscriptHit = {
   meetingId: string;
   sourceId: string;
+  name: string;
   createdAt: Date;
   index: number;
   text: string;
@@ -55,6 +57,7 @@ export async function searchTranscripts(
     joined.push({
       meetingId: hit.meetingId,
       sourceId: meeting.sourceId,
+      name: meetingName(meeting.sourceId, meeting.name),
       createdAt: meeting.createdAt,
       index: hit.index,
       text: hit.text,
@@ -82,6 +85,7 @@ export async function searchMeetingTranscripts(
     joined.push({
       meetingId: hit.meetingId,
       sourceId: meeting.sourceId,
+      name: meetingName(meeting.sourceId, meeting.name),
       createdAt: meeting.createdAt,
       index: hit.index,
       text: hit.text,

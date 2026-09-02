@@ -205,6 +205,7 @@ test("listMeetings tool execute returns JSON-safe meetings with an app href", as
       {
         id: "6a963d4f786296c73b01d6d0",
         sourceId: "screen-recording.webm",
+        name: "screen-recording",
         createdAt: "2026-09-01T03:33:00.000Z",
         status: "ready",
         href: "/meetings/6a963d4f786296c73b01d6d0",
@@ -230,6 +231,7 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
       {
         meetingId: "6a963d4f786296c73b01d6d0",
         sourceId: "screen-recording.webm",
+        name: "screen-recording",
         createdAt: new Date("2026-09-01T03:33:00.000Z"),
         index: 2,
         text: "expanding into new star systems",
@@ -247,6 +249,7 @@ test("searchTranscripts tool execute returns JSON-safe hits with an app href", a
     {
       meetingId: "6a963d4f786296c73b01d6d0",
       sourceId: "screen-recording.webm",
+      name: "screen-recording",
       createdAt: "2026-09-01T03:33:00.000Z",
       index: 2,
       text: "expanding into new star systems",
@@ -299,6 +302,7 @@ test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app h
       {
         meetingId: "6a963d4f786296c73b01d6d0",
         sourceId: "screen-recording.webm",
+        name: "screen-recording",
         createdAt: new Date("2026-09-01T03:33:00.000Z"),
         index: 2,
         text: "expanding into new star systems",
@@ -316,6 +320,7 @@ test("searchMeetingTranscripts tool execute returns JSON-safe hits with an app h
     {
       meetingId: "6a963d4f786296c73b01d6d0",
       sourceId: "screen-recording.webm",
+      name: "screen-recording",
       createdAt: "2026-09-01T03:33:00.000Z",
       index: 2,
       text: "expanding into new star systems",
@@ -360,6 +365,7 @@ test("listActions tool execute returns grouped JSON-safe tasks", async () => {
         {
           meetingId: "6a963d4f786296c73b01d6d0",
           sourceId: "screen-recording.webm",
+          name: "screen-recording",
           createdAt: "2026-09-01T03:33:00.000Z",
           href: "/meetings/6a963d4f786296c73b01d6d0",
           mediaKind: "video",
@@ -392,6 +398,7 @@ test("listActions tool execute returns grouped JSON-safe tasks", async () => {
       {
         meetingId: "6a963d4f786296c73b01d6d0",
         sourceId: "screen-recording.webm",
+        name: "screen-recording",
         createdAt: "2026-09-01T03:33:00.000Z",
         href: "/meetings/6a963d4f786296c73b01d6d0",
         mediaKind: "video",

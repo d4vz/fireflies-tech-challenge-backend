@@ -212,6 +212,7 @@ test("GET /meetings/:id still returns a meeting", async () => {
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.sourceId, "keep.mp4");
+  assert.equal(body.name, "keep");
 });
 
 test("GET /meetings/:id/video as another user returns 404 without reading the blob", async () => {

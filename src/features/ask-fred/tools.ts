@@ -18,6 +18,7 @@ import {
   type TranscriptHit,
   type TranscriptSearchQuery,
 } from "../meetings/search.ts";
+import { meetingName } from "../meetings/meeting-name.ts";
 import type { Meeting } from "../meetings/store.ts";
 
 export type AskFredDeps = {
@@ -35,6 +36,7 @@ function meetingHref(id: string) {
 type AskFredMeeting = {
   id: string;
   sourceId: string;
+  name: string;
   createdAt: string;
   status: Meeting["status"];
   href: string;
@@ -47,6 +49,7 @@ function toAskFredMeeting(meeting: WithId<Meeting>): AskFredMeeting {
   const card: AskFredMeeting = {
     id,
     sourceId: meeting.sourceId,
+    name: meetingName(meeting.sourceId, meeting.name),
     createdAt: meeting.createdAt.toISOString(),
     status: meeting.status,
     href: meetingHref(id),
@@ -73,6 +76,7 @@ function toAskFredTranscriptHit(hit: TranscriptHit) {
   return {
     meetingId: hit.meetingId,
     sourceId: hit.sourceId,
+    name: hit.name,
     createdAt: hit.createdAt.toISOString(),
     index: hit.index,
     text: hit.text,
@@ -103,7 +107,7 @@ export function createAskFredTools(deps: AskFredDeps) {
   return {
     listMeetings: tool({
       description: [
-        "List workspace meetings. Meetings have no title; identify them by sourceId, status, createdAt, and summary.",
+        "List workspace meetings. Identify them by name, sourceId, status, createdAt, and summary.",
         "Filter on createdAt range and status (queued | processing | ready | failed).",
         "Use the UTC today range from the system prompt. Do not invent a year.",
         "Examples:",
@@ -120,7 +124,7 @@ export function createAskFredTools(deps: AskFredDeps) {
     }),
     listActions: tool({
       description: [
-        "List action items grouped by meeting. Meetings have no title; identify them by sourceId.",
+        "List action items grouped by meeting. Identify them by name.",
         "Filter on status (pending | completed). Omit status for all tasks.",
         "Each row is one meeting with the matching tasks. Tasks have id, text, status, and updatedAt.",
         "Examples:",
@@ -135,7 +139,7 @@ export function createAskFredTools(deps: AskFredDeps) {
       description: [
         "Semantic search over transcript chunks across the meeting library. Not substring match.",
         "Use this when the user asks what was said and did not name a meeting.",
-        "Do not use this when they mean one call, this meeting, a sourceId they named, or an id you already have.",
+        "Do not use this when they mean one call, this meeting, a name they used, a sourceId they named, or an id you already have.",
         "Examples:",
         "- 'did we talk about the launch date?' with no meeting named",
         "- 'find what people said about billing' across calls",
@@ -148,7 +152,7 @@ export function createAskFredTools(deps: AskFredDeps) {
         "Semantic search over transcript chunks in one meeting. Not substring match.",
         "meetingId is required. The app does not send a current meeting.",
         "Get meetingId from listMeetings, from a prior search hit, or from the user.",
-        "If you only have a sourceId, call listMeetings first and use that meeting's id.",
+        "If you only have a name or sourceId, call listMeetings first and use that meeting's id.",
         "Examples:",
         "- 'on this call, did we talk about the launch date?'",
         "- 'in interview.mp4, quotes about billing'",

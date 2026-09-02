@@ -12,7 +12,7 @@ test("askFredSystemPrompt names the given UTC instant and today's exclusive rang
 test("askFredSystemPrompt tells Fred to link meetings with the app origin", () => {
   const prompt = askFredSystemPrompt(new Date("2026-09-01T17:17:00.000Z"), "http://localhost:8080");
   assert.match(prompt, /http:\/\/localhost:8080/);
-  assert.match(prompt, /\[sourceId\]\(http:\/\/localhost:8080\/meetings\/\{id\}\)/);
+  assert.match(prompt, /\[name\]\(http:\/\/localhost:8080\/meetings\/\{id\}\)/);
   assert.match(prompt, /short date/);
   assert.match(prompt, /your_workspace_url/);
   assert.match(prompt, /https:\/\/meetings\//);

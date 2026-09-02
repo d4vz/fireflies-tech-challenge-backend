@@ -120,6 +120,7 @@ test("searchTranscripts ranks by embedding, drops missing meetings, and omits em
   assert.equal(hits.length, 2);
   assert.equal(hits[0]?.text, "we talked about the launch date");
   assert.equal(hits[0]?.sourceId, "interview.mp4");
+  assert.equal(hits[0]?.name, "interview");
   assert.equal(hits[0]?.meetingId, keptId.toHexString());
   assert.ok(hits[0] !== undefined && hits[0].score > (hits[1]?.score ?? 0));
   assert.equal(
@@ -233,6 +234,7 @@ test("searchMeetingTranscripts stamps sourceId from the loaded meeting and passe
   assert.equal(hits.length, 1);
   assert.equal(hits[0]?.text, "we talked about the launch date");
   assert.equal(hits[0]?.sourceId, "interview.mp4");
+  assert.equal(hits[0]?.name, "interview");
   assert.equal(hits[0]?.meetingId, meetingId.toHexString());
   assert.equal(hits[0]?.createdAt.toISOString(), "2026-09-01T12:00:00.000Z");
   assert.deepEqual(scoped, [{ embedding: [1, 0], limit: 8, meetingId: meetingId.toHexString() }]);
