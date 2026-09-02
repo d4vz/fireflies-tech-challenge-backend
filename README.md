@@ -2,6 +2,8 @@
 
 This is a [Hono](https://hono.dev) app on [Bun](https://bun.sh). I picked Hono because it is lightweight and fast. This API is a small set of endpoints. I did not need a heavier framework for that.
 
+[Clerk](https://clerk.com) handles authentication. I chose Clerk because I initially planned to integrate with Google Calendar, and Clerk has a good Google OAuth integration that can provide the tokens for that kind of integration. It also gives every request a user ID. Meeting reads, writes, and AskFred searches use that ID, so one user cannot see another user's meetings.
+
 Meetings live in [MongoDB](https://www.mongodb.com). An upload can be video or audio, and the document shape is not fixed, so a document store fits. [MongoDB Vector Search](https://www.mongodb.com/docs/atlas/atlas-vector-search/vector-search-overview/) lets us search across embeddings. [Atlas Search](https://www.mongodb.com/docs/atlas/atlas-search/) is there if we want full-text later. That is not wired up today.
 
 Blobs go to [MinIO](https://min.io). It is S3-compatible, open source, and we run it ourselves.
