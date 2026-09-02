@@ -39,7 +39,9 @@ async function seedChunk(
   text: string,
   embedding: number[],
 ) {
-  await transcripts.insertAll(meetingId, [{ index, text, embedding, model: "test-embed" }]);
+  await transcripts.insertAll(meetingId, [
+    { index, speaker: "A", start: 0, end: 1, text, embedding, model: "test-embed" },
+  ]);
 }
 
 test("searchTranscripts ranks by embedding, drops missing meetings, and omits embeddings", async () => {
@@ -64,7 +66,7 @@ test("searchTranscripts ranks by embedding, drops missing meetings, and omits em
     { query: "launch date", limit: 8 },
   );
   assert.equal(hits.length, 2);
-  assert.equal(hits[0]?.text, "we talked about the launch date");
+  assert.equal(hits[0]?.text, "A: we talked about the launch date");
   assert.equal(hits[0]?.sourceId, "interview.mp4");
   assert.equal(hits[0]?.name, "interview");
   assert.equal(hits[0]?.meetingId, keptId.toHexString());
@@ -147,7 +149,7 @@ test("searchTranscripts with meetingId stamps sourceId and scopes the vector sea
     { meetingId: meetingId.toHexString(), query: "launch date", limit: 8 },
   );
   assert.equal(hits.length, 1);
-  assert.equal(hits[0]?.text, "we talked about the launch date");
+  assert.equal(hits[0]?.text, "A: we talked about the launch date");
   assert.equal(hits[0]?.sourceId, "interview.mp4");
   assert.equal(hits[0]?.name, "interview");
   assert.equal(hits[0]?.meetingId, meetingId.toHexString());
@@ -176,7 +178,7 @@ test("searchTranscripts does not return another user's hit", async () => {
     { query: "launch date", limit: 8 },
   );
   assert.equal(hits.length, 1);
-  assert.equal(hits[0]?.text, "my launch date");
+  assert.equal(hits[0]?.text, "A: my launch date");
   assert.equal(hits[0]?.meetingId, mineId.toHexString());
   assert.equal(
     hits.some((hit) => hit.meetingId === theirsId.toHexString()),
@@ -206,6 +208,6 @@ test("searchTranscripts keeps limit after ownership filter", async () => {
     { query: "secret", limit: 1 },
   );
   assert.equal(hits.length, 1);
-  assert.equal(hits[0]?.text, "my weaker match");
+  assert.equal(hits[0]?.text, "A: my weaker match");
   assert.equal(hits[0]?.meetingId, mineId.toHexString());
 });

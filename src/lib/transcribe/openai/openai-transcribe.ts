@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import OpenAI, { toFile } from "openai";
 import type { Transcribe } from "../index.ts";
+import { toTranscript, diarizedResponseSchema } from "./to-transcript.ts";
 
 export function createOpenaiTranscribe(model: string): Transcribe {
   const client = new OpenAI();
@@ -12,8 +13,10 @@ export function createOpenaiTranscribe(model: string): Transcribe {
           type: "audio/mpeg",
         }),
         model,
+        response_format: "diarized_json",
+        chunking_strategy: "auto",
       });
-      return { text: transcription.text };
+      return toTranscript(diarizedResponseSchema.parse(transcription));
     },
     ping: async () => {
       await client.models.list();

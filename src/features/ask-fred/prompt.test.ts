@@ -27,6 +27,7 @@ test("askFredSystemPrompt names four tools and meeting-scoped search", () => {
   assert.match(prompt, /searchMeetingTranscripts is for what was said in one meeting/);
   assert.match(prompt, /The app does not send a current meeting/);
   assert.match(prompt, /searchTranscripts is for what was said across the library/);
+  assert.match(prompt, /Hit text starts with a speaker label/);
   assert.match(prompt, /Prefer searchMeetingTranscripts once you have the meetingId/);
   assert.doesNotMatch(prompt, /three tools/);
 });

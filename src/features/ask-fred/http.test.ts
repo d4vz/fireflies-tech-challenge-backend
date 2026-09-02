@@ -9,7 +9,7 @@ import { ASK_FRED_REASONING_EFFORT } from "./http.ts";
 const settings = parseSettings(`
 chunkSize: 500
 models:
-  transcribe: gpt-4o-transcribe
+  transcribe: gpt-4o-transcribe-diarize
   summary: gpt-4o-mini
   embed: text-embedding-3-small
   chat: gpt-4o-mini

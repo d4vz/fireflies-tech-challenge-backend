@@ -11,7 +11,7 @@ import type { MeetingDraft, MeetingsStore } from "./store.ts";
 const settings = parseSettings(`
 chunkSize: 5
 models:
-  transcribe: gpt-4o-transcribe
+  transcribe: gpt-4o-transcribe-diarize
   summary: gpt-4o-mini
   embed: text-embedding-3-small
   chat: gpt-4o-mini
@@ -83,7 +83,13 @@ async function queuedJob(blobGet: ProcessMeetingDeps["blob"]["get"]): Promise<{
       get: blobGet,
       ping: async () => undefined,
     },
-    transcribe: { run: async () => ({ text: "abcdefghij" }), ping: async () => undefined },
+    transcribe: {
+      run: async () => ({
+        text: "A: abcdefghij",
+        segments: [{ speaker: "A", start: 0, end: 2, text: "abcdefghij" }],
+      }),
+      ping: async () => undefined,
+    },
     summarize: {
       run: async () => ({
         text: "summary",
@@ -107,18 +113,58 @@ test("processMeeting marks ready with chunks and tasks", async () => {
     body: bytesStream(new Uint8Array([1, 2, 3])),
     contentType: "video/mp4",
   }));
+  let summarized = "";
+  deps.summarize = {
+    run: async (transcript) => {
+      summarized = transcript;
+      return {
+        text: "summary",
+        takeaways: ["one"],
+        actionItems: ["review notes"],
+      };
+    },
+  };
   await processMeeting(deps, id);
   const ready = await meetings.get(actor, id);
   assert.equal(ready?.status, "ready");
   assert.equal(ready?.summary?.text, "summary");
   assert.equal(ready?.tasks?.length, 1);
   assert.equal(ready?.tasks?.[0]?.text, "review notes");
+  assert.equal(summarized, "A: abcdefghij");
   const chunks = await transcripts.listByMeeting(id);
   assert.equal(chunks.length, 2);
-  assert.deepEqual(
-    chunks.map((chunk) => chunk.text),
-    ["abcde", "fghij"],
-  );
+  assert.deepEqual(chunks, [
+    { index: 0, speaker: "A", start: 0, end: 2, text: "abcde" },
+    { index: 1, speaker: "A", start: 0, end: 2, text: "fghij" },
+  ]);
+});
+
+test("processMeeting stays ready with no chunks when segments are empty", async () => {
+  const { id, meetings, transcripts, deps } = await queuedJob(async () => ({
+    body: bytesStream(new Uint8Array([1, 2, 3])),
+    contentType: "video/mp4",
+  }));
+  deps.transcribe = {
+    run: async () => ({ text: "", segments: [] }),
+    ping: async () => undefined,
+  };
+  let summarized = "unset";
+  deps.summarize = {
+    run: async (transcript) => {
+      summarized = transcript;
+      return {
+        text: "summary",
+        takeaways: ["one"],
+        actionItems: ["review notes"],
+      };
+    },
+  };
+  await processMeeting(deps, id);
+  const ready = await meetings.get(actor, id);
+  assert.equal(ready?.status, "ready");
+  assert.equal(ready?.summary?.text, "summary");
+  assert.deepEqual(await transcripts.listByMeeting(id), []);
+  assert.equal(summarized, "");
 });
 
 test("processMeetingJob sets failed with the error message", async () => {

@@ -5,7 +5,7 @@ import { loadSettings, parseSecrets, parseSettings, settingsFileUrl } from "./in
 const yaml = `
 chunkSize: 500
 models:
-  transcribe: gpt-4o-transcribe
+  transcribe: gpt-4o-transcribe-diarize
   summary: gpt-4o-mini
   embed: text-embedding-3-small
   chat: gpt-4o-mini
@@ -36,6 +36,7 @@ test("parseSettings reads models, chunk size, and upload limits from yaml", () =
 test("AskFred chat model is gpt-5.1", async () => {
   const settings = await loadSettings(settingsFileUrl);
   assert.equal(settings.models.chat, "gpt-5.1");
+  assert.equal(settings.models.transcribe, "gpt-4o-transcribe-diarize");
 });
 
 test("parseSettings rejects yaml that is missing models", () => {

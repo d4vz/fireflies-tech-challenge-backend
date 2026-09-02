@@ -2,12 +2,12 @@ import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
 import type { Embed } from "../../lib/embed/index.ts";
 import type { Summarize } from "../../lib/summarize/index.ts";
-import type { Transcribe } from "../../lib/transcribe/index.ts";
+import { labeledTurnText, type Transcript, type Transcribe } from "../../lib/transcribe/index.ts";
 import type { Video } from "../../lib/video/index.ts";
 import { meetingVideoKey, type MeetingsStore } from "./store.ts";
 import { tasksFromActionItems } from "./tasks.ts";
 import { tempFileFrom } from "./temp-file.ts";
-import type { TranscriptsStore } from "./transcripts.ts";
+import type { NewTranscriptChunk, PublicTranscriptTurn, TranscriptsStore } from "./transcripts.ts";
 
 export type ProcessMeetingDeps = {
   video: Video;
@@ -25,10 +25,45 @@ export function chunkText(text: string, size: number) {
     return [];
   }
   const chunks: string[] = [];
-  for (let offset = 0; offset < text.length; offset += size) {
-    chunks.push(text.slice(offset, offset + size));
+  let offset = 0;
+  while (offset < text.length) {
+    const remaining = text.length - offset;
+    if (remaining <= size) {
+      chunks.push(text.slice(offset));
+      break;
+    }
+    const window = text.slice(offset, offset + size);
+    const breakAt = window.lastIndexOf(" ");
+    if (breakAt > 0) {
+      chunks.push(text.slice(offset, offset + breakAt));
+      offset += breakAt + 1;
+      continue;
+    }
+    chunks.push(window);
+    offset += size;
   }
   return chunks;
+}
+
+export function rowsFromTranscript(
+  transcript: Transcript,
+  chunkSize: number,
+): PublicTranscriptTurn[] {
+  const rows: PublicTranscriptTurn[] = [];
+  let index = 0;
+  for (const segment of transcript.segments) {
+    for (const text of chunkText(segment.text, chunkSize)) {
+      rows.push({
+        index,
+        speaker: segment.speaker,
+        start: segment.start,
+        end: segment.end,
+        text,
+      });
+      index += 1;
+    }
+  }
+  return rows;
 }
 
 export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string) {
@@ -43,22 +78,24 @@ export async function processMeeting(deps: ProcessMeetingDeps, meetingId: string
   const temp = await tempFileFrom(stored.body, "meeting-", "video");
   try {
     const audioPath = await video.extract(temp.path);
-    const { text } = await transcribe.run(audioPath);
-    const parts = chunkText(text, settings.chunkSize);
-    const embeddings = await embed.run(parts);
-    if (embeddings.length !== parts.length) {
+    const transcript = await transcribe.run(audioPath);
+    const rows = rowsFromTranscript(transcript, settings.chunkSize);
+    const labeled = rows.map((row) => labeledTurnText(row.speaker, row.text));
+    const embeddings = await embed.run(labeled);
+    if (embeddings.length !== rows.length) {
       throw new Error("embed count mismatch");
     }
-    await transcripts.insertAll(
-      meetingId,
-      parts.map((part, index) => ({
-        index,
-        text: part,
-        embedding: embeddings[index],
-        model: embed.model,
-      })),
-    );
-    const summary = await summarize.run(text);
+    const chunks: NewTranscriptChunk[] = rows.map((row, index) => ({
+      index: row.index,
+      speaker: row.speaker,
+      start: row.start,
+      end: row.end,
+      text: row.text,
+      embedding: embeddings[index],
+      model: embed.model,
+    }));
+    await transcripts.insertAll(meetingId, chunks);
+    const summary = await summarize.run(transcript.text);
     const tasks = tasksFromActionItems(summary.actionItems, meetings.createId, new Date());
     await meetings.setReady(meetingId, { text: summary.text, takeaways: summary.takeaways }, tasks);
   } finally {

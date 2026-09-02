@@ -1,7 +1,8 @@
 import { ObjectId } from "mongodb";
+import { labeledTurnText } from "../../lib/transcribe/index.ts";
 import type {
   NewTranscriptChunk,
-  PublicTranscriptChunk,
+  PublicTranscriptTurn,
   TranscriptChunkHit,
   TranscriptsStore,
 } from "./transcripts.ts";
@@ -9,6 +10,9 @@ import type {
 type StoredChunk = {
   meetingId: string;
   index: number;
+  speaker: string;
+  start: number;
+  end: number;
   text: string;
   embedding: number[];
 };
@@ -50,16 +54,25 @@ export function createMemoryTranscripts(): TranscriptsStore {
         rows.push({
           meetingId,
           index: chunk.index,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
           text: chunk.text,
           embedding: chunk.embedding,
         });
       }
     },
-    listByMeeting: async (meetingId): Promise<PublicTranscriptChunk[]> => {
+    listByMeeting: async (meetingId): Promise<PublicTranscriptTurn[]> => {
       return rows
         .filter((chunk) => chunk.meetingId === meetingId)
         .sort((left, right) => left.index - right.index)
-        .map((chunk) => ({ index: chunk.index, text: chunk.text }));
+        .map((chunk) => ({
+          index: chunk.index,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
+          text: chunk.text,
+        }));
     },
     searchByEmbedding: async (embedding, limit, meetingIds): Promise<TranscriptChunkHit[]> => {
       if (meetingIds !== undefined && meetingIds.length === 0) {
@@ -70,7 +83,7 @@ export function createMemoryTranscripts(): TranscriptsStore {
         .map((chunk) => ({
           meetingId: chunk.meetingId,
           index: chunk.index,
-          text: chunk.text,
+          text: labeledTurnText(chunk.speaker, chunk.text),
           score: cosine(embedding, chunk.embedding),
         }))
         .sort((left, right) => right.score - left.score)

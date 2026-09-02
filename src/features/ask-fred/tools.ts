@@ -95,7 +95,8 @@ export function createAskFredTools(deps: AskFredDeps) {
     }),
     searchTranscripts: tool({
       description: [
-        "Semantic search over transcript chunks across the meeting library. Not substring match.",
+        "Semantic search over transcript turns across the meeting library. Not substring match.",
+        "Each hit text starts with a speaker label such as A: or B:.",
         "Use this when the user asks what was said and did not name a meeting.",
         "Do not use this when they mean one call, this meeting, a name they used, a sourceId they named, or an id you already have.",
         "Examples:",
@@ -107,7 +108,8 @@ export function createAskFredTools(deps: AskFredDeps) {
     }),
     searchMeetingTranscripts: tool({
       description: [
-        "Semantic search over transcript chunks in one meeting. Not substring match.",
+        "Semantic search over transcript turns in one meeting. Not substring match.",
+        "Each hit text starts with a speaker label such as A: or B:.",
         "meetingId is required. The app does not send a current meeting.",
         "Get meetingId from listMeetings, from a prior search hit, or from the user.",
         "If you only have a name or sourceId, call listMeetings first and use that meeting's id.",

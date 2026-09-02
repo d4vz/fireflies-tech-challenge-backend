@@ -1,20 +1,30 @@
 import { MongoServerError, ObjectId, type Db, type MongoClient } from "mongodb";
+import { labeledTurnText } from "../../lib/transcribe/index.ts";
 
 export type TranscriptChunk = {
   meetingId: ObjectId;
   index: number;
+  speaker: string;
+  start: number;
+  end: number;
   text: string;
   embedding: number[];
   model: string;
 };
 
-export type PublicTranscriptChunk = {
+export type PublicTranscriptTurn = {
   index: number;
+  speaker: string;
+  start: number;
+  end: number;
   text: string;
 };
 
 export type NewTranscriptChunk = {
   index: number;
+  speaker: string;
+  start: number;
+  end: number;
   text: string;
   embedding: number[];
   model: string;
@@ -29,7 +39,7 @@ export type TranscriptChunkHit = {
 
 export type TranscriptsStore = {
   insertAll: (meetingId: string, chunks: NewTranscriptChunk[]) => Promise<void>;
-  listByMeeting: (meetingId: string) => Promise<PublicTranscriptChunk[]>;
+  listByMeeting: (meetingId: string) => Promise<PublicTranscriptTurn[]>;
   searchByEmbedding: (
     embedding: number[],
     limit: number,
@@ -74,6 +84,7 @@ function vectorIndexHasMeetingIdFilter(index: ListedSearchIndex): boolean {
 type VectorHit = {
   meetingId: ObjectId;
   index: number;
+  speaker: string;
   text: string;
   score: number;
 };
@@ -124,7 +135,7 @@ function toChunkHit(row: VectorHit): TranscriptChunkHit {
   return {
     meetingId: row.meetingId.toHexString(),
     index: row.index,
-    text: row.text,
+    text: labeledTurnText(row.speaker, row.text),
     score: row.score,
   };
 }
@@ -143,6 +154,9 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
         chunks.map((chunk) => ({
           meetingId: id,
           index: chunk.index,
+          speaker: chunk.speaker,
+          start: chunk.start,
+          end: chunk.end,
           text: chunk.text,
           embedding: chunk.embedding,
           model: chunk.model,
@@ -155,7 +169,7 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
       }
       return collection
         .find({ meetingId: new ObjectId(meetingId) })
-        .project<PublicTranscriptChunk>({ index: 1, text: 1, _id: 0 })
+        .project<PublicTranscriptTurn>({ index: 1, speaker: 1, start: 1, end: 1, text: 1, _id: 0 })
         .sort({ index: 1 })
         .toArray();
     },
@@ -184,6 +198,7 @@ export function createTranscriptsStore(client: MongoClient): TranscriptsStore {
             $project: {
               meetingId: 1,
               index: 1,
+              speaker: 1,
               text: 1,
               score: { $meta: "vectorSearchScore" },
             },
