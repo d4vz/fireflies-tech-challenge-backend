@@ -17,6 +17,7 @@
     "@ai-sdk/openai": "^4.0.53",
     "@aws-sdk/client-s3": "3.1123.0",
     "@aws-sdk/lib-storage": "3.1123.0",
+    "@clerk/backend": "^3.17.0",
     "@hono/node-server": "^1.19.9",
     "@hono/zod-validator": "^0.9.1",
     "@smithy/node-http-handler": "^4.12.0",

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ObjectId, type WithId } from "mongodb";
 import { z } from "zod";
+import { ownerId, type OwnerId } from "../../lib/auth/index.ts";
 import {
   meetingTranscriptSearchQuerySchema,
   searchMeetingTranscripts,
   searchTranscripts,
 } from "./search.ts";
-import type { Meeting, MeetingsStore } from "./store.ts";
+import { forActor, type Meeting, type MeetingsStore } from "./store.ts";
 import type { TranscriptChunkHit, TranscriptsStore } from "./transcripts.ts";
 
 function cosine(left: number[], right: number[]): number {
@@ -24,9 +25,14 @@ function cosine(left: number[], right: number[]): number {
   return dot / (Math.sqrt(leftNorm) * Math.sqrt(rightNorm));
 }
 
-function sampleMeeting(id: ObjectId, sourceId: string): WithId<Meeting> {
+function sampleMeeting(
+  id: ObjectId,
+  sourceId: string,
+  userId: OwnerId = ownerId("user_a"),
+): WithId<Meeting> {
   return {
     _id: id,
+    userId,
     sourceType: "upload",
     sourceId,
     createdAt: new Date("2026-09-01T12:00:00.000Z"),
@@ -227,4 +233,66 @@ test("searchMeetingTranscripts stamps sourceId from the loaded meeting and passe
   assert.equal(hits[0]?.meetingId, meetingId.toHexString());
   assert.equal(hits[0]?.createdAt.toISOString(), "2026-09-01T12:00:00.000Z");
   assert.deepEqual(scoped, [{ embedding: [1, 0], limit: 8, meetingId: meetingId.toHexString() }]);
+});
+
+test("searchTranscripts does not return another user's hit", async () => {
+  const mineId = new ObjectId();
+  const theirsId = new ObjectId();
+  const mine = sampleMeeting(mineId, "mine.mp4", ownerId("user_a"));
+  const theirs = sampleMeeting(theirsId, "theirs.mp4", ownerId("user_b"));
+  const meetings: MeetingsStore = {
+    createId: () => new ObjectId(),
+    insert: async () => unused(),
+    get: async (id) => {
+      if (id === mineId.toHexString()) {
+        return mine;
+      }
+      if (id === theirsId.toHexString()) {
+        return theirs;
+      }
+      return null;
+    },
+    list: async () => unused(),
+    count: async () => unused(),
+    setStatus: async () => unused(),
+    setReady: async () => unused(),
+    setFailed: async () => unused(),
+  };
+  const transcripts: TranscriptsStore = {
+    insertAll: async () => unused(),
+    listByMeeting: async () => unused(),
+    searchByEmbedding: async () => [
+      {
+        meetingId: theirsId.toHexString(),
+        index: 0,
+        text: "secret from another user",
+        score: 0.99,
+      },
+      {
+        meetingId: mineId.toHexString(),
+        index: 0,
+        text: "my launch date",
+        score: 0.5,
+      },
+    ],
+    ensureVectorIndex: async () => unused(),
+  };
+  const hits = await searchTranscripts(
+    {
+      meetings: forActor(meetings, { id: ownerId("user_a") }),
+      transcripts,
+      embed: {
+        model: "test-embed",
+        run: async () => [[1, 0]],
+      },
+    },
+    { query: "launch date", limit: 8 },
+  );
+  assert.equal(hits.length, 1);
+  assert.equal(hits[0]?.text, "my launch date");
+  assert.equal(hits[0]?.meetingId, mineId.toHexString());
+  assert.equal(
+    hits.some((hit) => hit.meetingId === theirsId.toHexString()),
+    false,
+  );
 });

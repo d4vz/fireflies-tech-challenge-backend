@@ -32,6 +32,7 @@ const secretsSchema = z.object({
   S3_REGION: z.string().min(1).default("us-east-1"),
   S3_PUBLIC_ENDPOINT: z.string().min(1).optional(),
   FRONTEND_ORIGIN: z.string().min(1).optional(),
+  CLERK_SECRET_KEY: z.string().min(1),
   REDIS_URL: z.string().min(1),
 });
 

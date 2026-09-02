@@ -3,11 +3,12 @@ import { bodyLimit } from "hono/body-limit";
 import { zValidator } from "@hono/zod-validator";
 import type { Blob } from "../../lib/blob/index.ts";
 import type { AppSettings } from "../../lib/config/index.ts";
+import type { AppEnv } from "../../lib/middleware/index.ts";
 import type { Queue } from "../../lib/queue/index.ts";
 import type { Video } from "../../lib/video/index.ts";
-import { createRequestTempFile, classifyUpload } from "./upload-file.ts";
+import { createRequestTempFile, isAllowedFormat } from "./upload-file.ts";
 import { storeMeeting } from "./store-meeting.ts";
-import { meetingThumbnailKey, meetingVideoKey, type MeetingsStore } from "./store.ts";
+import { forActor, meetingThumbnailKey, meetingVideoKey, type MeetingsStore } from "./store.ts";
 import type { TranscriptsStore } from "./transcripts.ts";
 import { listMeetings, meetingListQuerySchema } from "./list-query.ts";
 
@@ -33,38 +34,51 @@ async function sendStoredObject(blob: Blob, key: string, fallbackType: string) {
   });
 }
 
-export function mountMeetings(app: Hono, deps: MeetingsHttpDeps) {
+export function mountMeetings(app: Hono<AppEnv>, deps: MeetingsHttpDeps) {
   app.get("/meetings", zValidator("query", meetingListQuerySchema), async (c) => {
-    return c.json(await listMeetings(deps.meetings, c.req.valid("query")));
+    return c.json(
+      await listMeetings(forActor(deps.meetings, c.get("actor")), c.req.valid("query")),
+    );
   });
 
   app.get("/meetings/:id/thumbnail", async (c) => {
+    const meeting = await forActor(deps.meetings, c.get("actor")).get(c.req.param("id"));
+    if (!meeting) {
+      return c.json({ error: "not found" }, 404);
+    }
     return (
-      (await sendStoredObject(deps.blob, meetingThumbnailKey(c.req.param("id")), "image/jpeg")) ??
-      c.json({ error: "not found" }, 404)
+      (await sendStoredObject(
+        deps.blob,
+        meetingThumbnailKey(meeting._id.toHexString()),
+        "image/jpeg",
+      )) ?? c.json({ error: "not found" }, 404)
     );
   });
 
   app.get("/meetings/:id/video", async (c) => {
+    const meeting = await forActor(deps.meetings, c.get("actor")).get(c.req.param("id"));
+    if (!meeting) {
+      return c.json({ error: "not found" }, 404);
+    }
     return (
       (await sendStoredObject(
         deps.blob,
-        meetingVideoKey(c.req.param("id")),
+        meetingVideoKey(meeting._id.toHexString()),
         "application/octet-stream",
       )) ?? c.json({ error: "not found" }, 404)
     );
   });
 
   app.get("/meetings/:id/transcripts", async (c) => {
-    const meeting = await deps.meetings.get(c.req.param("id"));
+    const meeting = await forActor(deps.meetings, c.get("actor")).get(c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "meeting not found" }, 404);
     }
-    return c.json(await deps.transcripts.listByMeeting(c.req.param("id")));
+    return c.json(await deps.transcripts.listByMeeting(meeting._id.toHexString()));
   });
 
   app.get("/meetings/:id", async (c) => {
-    const meeting = await deps.meetings.get(c.req.param("id"));
+    const meeting = await forActor(deps.meetings, c.get("actor")).get(c.req.param("id"));
     if (!meeting) {
       return c.json({ error: "meeting not found" }, 404);
     }
@@ -87,14 +101,13 @@ export function mountMeetings(app: Hono, deps: MeetingsHttpDeps) {
         return c.json({ error: "file is required" }, 400);
       }
 
-      const classified = classifyUpload(file, deps.settings.upload);
-      if (classified === undefined) {
+      if (!isAllowedFormat(file, deps.settings.upload)) {
         await closeFile();
         return c.json({ error: "file format is not supported" }, 400);
       }
 
       try {
-        const meeting = await storeMeeting(deps, classified);
+        const meeting = await storeMeeting(deps, file, c.get("actor"));
         return c.json(meeting, 201);
       } finally {
         await closeFile();

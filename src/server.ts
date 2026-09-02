@@ -1,6 +1,7 @@
 import { serve } from "@hono/node-server";
 import { openai } from "@ai-sdk/openai";
 import { minioBlobFromEnv } from "./lib/blob/minio/minio-blob.ts";
+import { createClerkAuthVerify } from "./lib/auth/clerk/clerk-jwt.ts";
 import { loadSettings, parseSecrets, settingsFileUrl } from "./lib/config/index.ts";
 import { mongoFromEnv } from "./lib/db/mongo/mongo-db.ts";
 import { createOpenaiEmbed } from "./lib/embed/openai/openai-embed.ts";
@@ -26,6 +27,7 @@ const model = openai(settings.models.chat);
 const meetings = createMeetingsStore(mongo);
 const transcripts = createTranscriptsStore(mongo);
 const queue = createBullmqQueue(secrets.REDIS_URL);
+const auth = createClerkAuthVerify(secrets.CLERK_SECRET_KEY, secrets.FRONTEND_ORIGIN);
 
 const processDeps = {
   video,
@@ -52,6 +54,7 @@ const app = createApp({
   settings,
   embed,
   model,
+  auth,
   origin: secrets.FRONTEND_ORIGIN,
 });
 

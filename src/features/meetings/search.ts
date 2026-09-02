@@ -32,7 +32,7 @@ export const meetingTranscriptSearchQuerySchema = transcriptSearchQuerySchema.ex
 });
 
 export type SearchTranscriptsDeps = {
-  meetings: MeetingsStore;
+  meetings: Pick<MeetingsStore, "get">;
   transcripts: TranscriptsStore;
   embed: Embed;
 };
