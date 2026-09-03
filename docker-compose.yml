@@ -47,7 +47,9 @@ services:
       retries: 10
 
   api:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile.local
     ports:
       - "3000:3000"
     env_file:
