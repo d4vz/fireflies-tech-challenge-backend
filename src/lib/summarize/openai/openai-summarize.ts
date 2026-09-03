@@ -19,7 +19,7 @@ export function createOpenaiSummarize(model: string): Summarize {
           {
             role: "system",
             content:
-              "Summarize the meeting. Return a short summary, key takeaways, and action items. When the transcript labels speakers (A:, B:), name that speaker in action items that belong to them.",
+              "Summarize the meeting. Return a short summary, key takeaways, and action items.",
           },
           { role: "user", content: transcript.length > 0 ? transcript : "(empty transcript)" },
         ],
