@@ -21,6 +21,18 @@ test("meetingListQuerySchema defaults page to 1 and limit to 10", () => {
   assert.equal(query.to, undefined);
   assert.equal(query.status, undefined);
   assert.equal(query.sourceId, undefined);
+  assert.equal(query.q, undefined);
+});
+
+test("meetingListQuerySchema keeps a trimmed text query and drops blank q", () => {
+  assert.equal(meetingListQuerySchema.parse({ q: "  standup notes  " }).q, "standup notes");
+  assert.equal(meetingListQuerySchema.parse({ q: "   " }).q, undefined);
+  assert.equal(meetingListQuerySchema.parse({ q: "" }).q, undefined);
+  assert.equal(meetingListQuerySchema.parse({ q: '"standup" -notes' }).q, "standup notes");
+});
+
+test("meetingListQuerySchema rejects a text query longer than 200 characters", () => {
+  assert.throws(() => meetingListQuerySchema.parse({ q: "n".repeat(201) }));
 });
 
 test("meetingListQuerySchema coerces ISO dates", () => {
@@ -72,14 +84,19 @@ function sampleMeeting(input: {
   createdAt: Date;
   status?: MeetingStatus;
   sourceId?: string;
+  name?: string;
+  summaryText?: string;
 }): WithId<Meeting> {
   return {
     _id: new ObjectId(),
     userId: ownerId("user_a"),
     sourceType: "upload",
     sourceId: input.sourceId ?? "interview.mp4",
+    name: input.name,
     createdAt: input.createdAt,
     status: input.status ?? "ready",
+    summary:
+      input.summaryText === undefined ? undefined : { text: input.summaryText, takeaways: [] },
     blob: {
       kind: "video",
       url: "/v",
@@ -106,8 +123,9 @@ test("meetingFilter drops page and limit", () => {
       to,
       status: "queued",
       sourceId: "interview.mp4",
+      q: "standup",
     }),
-    { from, to, status: "queued", sourceId: "interview.mp4" },
+    { from, to, status: "queued", sourceId: "interview.mp4", q: "standup" },
   );
 });
 
@@ -152,4 +170,48 @@ test("listMeetings shares one filter with list and count and skips by page", asy
   assert.equal(page.limit, 1);
   assert.equal(page.items.length, 1);
   assert.equal(page.items[0]?._id.toHexString(), matching[1]!._id.toHexString());
+});
+
+test("listMeetings matches title or summary text and keeps newest first", async () => {
+  const day = new Date("2026-09-01T12:00:00.000Z");
+  const titled = sampleMeeting({
+    createdAt: new Date("2026-09-01T18:00:00.000Z"),
+    name: "Weekly standup",
+  });
+  const summarized = sampleMeeting({
+    createdAt: day,
+    name: "Design review",
+    summaryText: "We agreed to ship the standup bot next week.",
+  });
+  const other = sampleMeeting({
+    createdAt: new Date("2026-09-01T08:00:00.000Z"),
+    name: "Payroll",
+    summaryText: "Benefits enrollment closes Friday.",
+  });
+  const { meetings } = createMemoryMeetings([titled, summarized, other]);
+  const actor = { id: ownerId("user_a") };
+  const page = await listMeetings(meetings, actor, { page: 1, limit: 10, q: "standup" });
+  assert.equal(page.total, 2);
+  assert.deepEqual(
+    page.items.map((item) => item.name),
+    ["Weekly standup", "Design review"],
+  );
+});
+
+test("listMeetings text query does not return another user's meeting", async () => {
+  const mine = sampleMeeting({ createdAt: new Date(), name: "Standup" });
+  const theirs = sampleMeeting({ createdAt: new Date(), name: "Standup" });
+  theirs.userId = ownerId("user_b");
+  const { meetings } = createMemoryMeetings([mine, theirs]);
+  const page = await listMeetings(
+    meetings,
+    { id: ownerId("user_a") },
+    {
+      page: 1,
+      limit: 10,
+      q: "standup",
+    },
+  );
+  assert.equal(page.total, 1);
+  assert.equal(page.items[0]?._id.toHexString(), mine._id.toHexString());
 });

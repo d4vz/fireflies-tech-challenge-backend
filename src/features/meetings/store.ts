@@ -49,6 +49,7 @@ export type MeetingQuery = {
   to?: Date;
   status?: MeetingStatus;
   sourceId?: string;
+  q?: string;
   taskStatus?: TaskStatus;
   hasTasks?: boolean;
 };

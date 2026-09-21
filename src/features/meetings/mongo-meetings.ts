@@ -22,6 +22,14 @@ type CreatedAtBounds = {
   $lt?: Date;
 };
 
+function textSearchOf(q: string): string {
+  return q
+    .split(/\s+/)
+    .filter((term) => term !== "")
+    .map((term) => `"${term}"`)
+    .join(" ");
+}
+
 function mongoFilter(filter: MeetingFilter): Filter<Meeting> {
   const query: Filter<Meeting> = { userId: filter.userId };
   if (filter.status !== undefined) {
@@ -29,6 +37,9 @@ function mongoFilter(filter: MeetingFilter): Filter<Meeting> {
   }
   if (filter.sourceId !== undefined) {
     query.sourceId = filter.sourceId;
+  }
+  if (filter.q !== undefined) {
+    query.$text = { $search: textSearchOf(filter.q) };
   }
   if (filter.taskStatus !== undefined) {
     query.tasks = { $elemMatch: { status: filter.taskStatus } };
@@ -101,6 +112,14 @@ async function setOwnedTaskStatus(
 export function createMongoMeetings(client: MongoClient): MongoMeetings {
   const collection = client.db().collection<Meeting>("meetings");
   void collection.createIndex({ userId: 1, createdAt: -1 });
+  void collection.createIndex(
+    { userId: 1, name: "text", sourceId: "text", "summary.text": "text" },
+    {
+      name: "meetings_text",
+      default_language: "none",
+      weights: { name: 10, sourceId: 5, "summary.text": 1 },
+    },
+  );
 
   const store: MeetingsStore = {
     createId: () => new ObjectId(),

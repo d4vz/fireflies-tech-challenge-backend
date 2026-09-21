@@ -100,6 +100,27 @@ function runMeetingsContract(
     assert.equal(items[0]?.sourceId, "older.mp4");
   });
 
+  test(`${name} list matches title or summary text`, async () => {
+    const { meetings } = factory();
+    const titled = draft("standup.mp4", new Date("2026-09-02T12:00:00.000Z"));
+    titled.name = "Weekly standup";
+    const summarized = draft("review.mp4", new Date("2026-09-01T12:00:00.000Z"));
+    summarized.name = "Design review";
+    summarized.summary = { text: "Ship the standup bot next week.", takeaways: [] };
+    const other = draft("payroll.mp4");
+    other.name = "Payroll";
+    other.summary = { text: "Benefits enrollment closes Friday.", takeaways: [] };
+    await meetings.insert(userA, titled);
+    await meetings.insert(userA, summarized);
+    await meetings.insert(userA, other);
+    const items = await meetings.list(userA, 0, 10, { q: "standup" });
+    assert.deepEqual(
+      items.map((item) => item.sourceId),
+      ["standup.mp4", "review.mp4"],
+    );
+    assert.equal(await meetings.count(userA, { q: "standup" }), 2);
+  });
+
   test(`${name} list matches hasTasks and taskStatus`, async () => {
     const { meetings } = factory();
     const withPending = draft("pending.mp4");

@@ -10,7 +10,24 @@ export type MeetingListQuery = PageQuery & {
   to?: Date;
   status?: MeetingStatus;
   sourceId?: string;
+  q?: string;
 };
+
+export function meetingTextQuery(value: string | undefined): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  const cleaned = value
+    .trim()
+    .replace(/"/g, " ")
+    .replace(/(^|\s)-+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned === "") {
+    return undefined;
+  }
+  return cleaned;
+}
 
 export type MeetingFilter = MeetingQuery;
 
@@ -22,6 +39,12 @@ export const meetingListQuerySchema: z.ZodType<MeetingListQuery> = pageQuerySche
     to: z.coerce.date().optional(),
     status: z.enum(["queued", "processing", "ready", "failed"]).optional(),
     sourceId: z.string().min(1).optional(),
+    q: z
+      .string()
+      .trim()
+      .max(200)
+      .optional()
+      .transform((value) => meetingTextQuery(value)),
   })
   .refine(fromBeforeTo, { message: "from must be before to" });
 
@@ -38,6 +61,9 @@ export function meetingFilter(query: MeetingListQuery): MeetingQuery {
   }
   if (query.sourceId !== undefined) {
     filter.sourceId = query.sourceId;
+  }
+  if (query.q !== undefined) {
+    filter.q = query.q;
   }
   return filter;
 }

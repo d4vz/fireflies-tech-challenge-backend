@@ -144,6 +144,29 @@ test("GET /meetings validates query and lists through listMeetings", async () =>
   assert.equal(body.items[0]?.sourceId, "a.mp4");
 });
 
+test("GET /meetings filters by title or summary text", async () => {
+  const titled = sampleMeeting("standup.mp4");
+  titled.name = "Weekly standup";
+  titled.createdAt = new Date("2026-09-01T18:00:00.000Z");
+  const summarized = sampleMeeting("review.mp4");
+  summarized.name = "Design review";
+  summarized.createdAt = new Date("2026-09-01T12:00:00.000Z");
+  summarized.summary = { text: "Ship the standup bot next week.", takeaways: [] };
+  const other = sampleMeeting("payroll.mp4");
+  other.name = "Payroll";
+  const { app } = appFor([titled, summarized, other]);
+  const res = await app.request("/meetings?q=standup", {
+    headers: bearerAuth(titled.userId),
+  });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.total, 2);
+  assert.deepEqual(
+    body.items.map((item: { name: string }) => item.name),
+    ["Weekly standup", "Design review"],
+  );
+});
+
 test("GET /meetings defaults page and limit", async () => {
   const { app } = appFor();
   const res = await app.request("/meetings", { headers: bearerAuth("user_a") });
@@ -163,6 +186,8 @@ test("GET /meetings returns 400 for an invalid query", async () => {
   assert.equal(limit.status, 400);
   const status = await app.request("/meetings?status=nope", { headers });
   assert.equal(status.status, 400);
+  const text = await app.request(`/meetings?q=${"n".repeat(201)}`, { headers });
+  assert.equal(text.status, 400);
   const range = await app.request(
     "/meetings?from=2026-09-02T00:00:00.000Z&to=2026-09-01T00:00:00.000Z",
     { headers },

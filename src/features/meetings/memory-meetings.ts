@@ -38,6 +38,29 @@ function matchesTasks(meeting: WithId<Meeting>, filter: MeetingFilter): boolean 
   return true;
 }
 
+function fieldTokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token !== "");
+}
+
+function meetingTokens(meeting: WithId<Meeting>): string[] {
+  return [
+    ...fieldTokens(meeting.name ?? ""),
+    ...fieldTokens(meeting.sourceId),
+    ...fieldTokens(meeting.summary?.text ?? ""),
+  ];
+}
+
+function matchesText(meeting: WithId<Meeting>, filter: MeetingFilter): boolean {
+  if (filter.q === undefined) {
+    return true;
+  }
+  const hay = meetingTokens(meeting);
+  return fieldTokens(filter.q).every((token) => hay.some((word) => word.startsWith(token)));
+}
+
 function matchesFilter(meeting: WithId<Meeting>, filter: MeetingFilter): boolean {
   if (meeting.userId !== filter.userId) {
     return false;
@@ -48,7 +71,11 @@ function matchesFilter(meeting: WithId<Meeting>, filter: MeetingFilter): boolean
   if (filter.sourceId !== undefined && meeting.sourceId !== filter.sourceId) {
     return false;
   }
-  return matchesCreatedAt(meeting, filter) && matchesTasks(meeting, filter);
+  return (
+    matchesCreatedAt(meeting, filter) &&
+    matchesTasks(meeting, filter) &&
+    matchesText(meeting, filter)
+  );
 }
 
 function byNewest(left: WithId<Meeting>, right: WithId<Meeting>): number {
